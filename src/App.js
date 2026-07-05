@@ -272,17 +272,11 @@ function TripSetup({ onDone, savedTrip, onResume }) {
 
   return (
     <div style={styles.setupScreen}>
-      {/* Gradient hero area */}
       <div style={{ width: "100%", maxWidth: 480 }}>
-        <div style={{ padding: "48px 24px 32px", textAlign: "center" }}>
-          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 32, color: "#f5e882", marginBottom: 4 }}>Trip Planner</div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#a8c4e0" }}>Plan. Share. Explore.</div>
-        </div>
-      <div style={styles.setupCard}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ fontSize: 52, marginBottom: 8 }}>✈️</div>
-          <h1 style={styles.setupTitle}>Plan a Trip</h1>
-          <p style={{ color: "#4a6fa5", fontSize: 14, marginTop: 6, fontFamily: "'DM Sans',sans-serif" }}>Let's start with the basics</p>
+        <div style={styles.setupCard}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 30, color: "#1a3a8f", marginBottom: 4 }}>Trip Planner {"✈️"}</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#4a6fa5" }}>Plan. Share. Explore.</div>
         </div>
         {savedTrip && (
           <div style={{ background: "#1a1500", border: "1px solid #f59e0b44", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
@@ -349,7 +343,7 @@ function TripSetup({ onDone, savedTrip, onResume }) {
           onClick={() => onDone({ name, start, end, travellers, currency })}>
           Start Planning →
         </button>
-      </div>
+        </div>
       </div>
     </div>
   );
@@ -1167,11 +1161,14 @@ export default function TripPlanner() {
         .main-panel{display:none!important;}
         .main-panel.show{display:flex!important;}
         .mobile-nav{display:flex!important;}
-        /* Desktop: show both side by side */
-        @media(min-width:768px){
+        /* Hide top tab bar on mobile — bottom nav handles it */
+        .tab-row-bar{display:none!important;}
+        /* Desktop: show both side by side, top tabs, no bottom nav */
+        @media(min-width:1024px){
           .sidebar{display:flex!important;}
           .main-panel{display:flex!important;}
           .mobile-nav{display:none!important;}
+          .tab-row-bar{display:flex!important;}
         }
       `}</style>
 
@@ -1285,7 +1282,7 @@ export default function TripPlanner() {
           </div>
         </div>
         {/* Tab bar — full width below topbar */}
-        <div style={styles.tabRowBar}>
+        <div className="tab-row-bar" style={styles.tabRowBar}>
           {[["plan","📋","Plan"],["budget","💰","Budget"],["story","📱","Share"]].map(([id,icon,label]) => (
             <button key={id} style={{ ...styles.tabRowBtn, ...(tab === id ? styles.tabRowBtnActive : {}) }}
               onClick={() => { setTab(id); if(id==="plan") setMobileView("pool"); }}>
@@ -1421,15 +1418,28 @@ export default function TripPlanner() {
           </div>
         )}
 
-        {/* Mobile bottom nav */}
+        {/* Mobile bottom nav — all 4 tabs */}
         <div className="mobile-nav" style={styles.mobileNav}>
-          {[["pool","💡","Ideas"],["schedule","🗓","Plan"]].map(([id,icon,label]) => (
-            <button key={id} style={{ ...styles.mnavBtn, ...(tab==="plan" && mobileView === id ? styles.mnavActive : {}) }}
-              onClick={() => { setTab("plan"); setMobileView(id); }}>
-              <span style={{ fontSize: 22 }}>{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
+          <button style={{ ...styles.mnavBtn, ...(tab==="plan" && mobileView==="pool" ? styles.mnavActive : {}) }}
+            onClick={() => { setTab("plan"); setMobileView("pool"); }}>
+            <span style={{ fontSize: 22 }}>💡</span>
+            <span>Ideas</span>
+          </button>
+          <button style={{ ...styles.mnavBtn, ...(tab==="plan" && mobileView==="schedule" ? styles.mnavActive : {}) }}
+            onClick={() => { setTab("plan"); setMobileView("schedule"); }}>
+            <span style={{ fontSize: 22 }}>🗓</span>
+            <span>Plan</span>
+          </button>
+          <button style={{ ...styles.mnavBtn, ...(tab==="budget" ? styles.mnavActive : {}) }}
+            onClick={() => setTab("budget")}>
+            <span style={{ fontSize: 22 }}>💰</span>
+            <span>Budget</span>
+          </button>
+          <button style={{ ...styles.mnavBtn, ...(tab==="story" ? styles.mnavActive : {}) }}
+            onClick={() => setTab("story")}>
+            <span style={{ fontSize: 22 }}>📱</span>
+            <span>Share</span>
+          </button>
         </div>
       </div>
     </>
@@ -1549,8 +1559,8 @@ const styles = {
   catChip: { border: "none", borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", transition: "all .2s" },
 
   // Trip setup
-  setupScreen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 60%, #a8c4e0 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "0" },
-  setupCard: { background: "#fff", borderRadius: "0 0 28px 28px", padding: "40px 24px 40px", width: "100%", maxWidth: 480, overflowY: "auto", boxShadow: "0 8px 40px rgba(26,58,143,.2)" },
+  setupScreen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 60%, #a8c4e0 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
+  setupCard: { background: "#fff", borderRadius: 24, padding: "32px 24px", width: "100%", maxWidth: 480, overflowY: "auto", boxShadow: "0 8px 40px rgba(26,58,143,.3)" },
   setupTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 28, color: "#1a3a8f", marginTop: 8 },
   travChip: { background: "#deeaf7", color: "#1a3a8f", borderRadius: 20, padding: "4px 12px", fontSize: 11, display: "flex", alignItems: "center", fontFamily: "'Space Mono',monospace" },
 
