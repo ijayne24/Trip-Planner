@@ -1234,6 +1234,9 @@ export default function TripPlanner() {
     onTouchEnd,
   });
 
+  // Detect mobile via JS — more reliable than CSS media queries in webviews
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
+
   if (!loaded) return <div style={{ background: "#deeaf7", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
 
   if (screen === "dashboard") return (
@@ -1419,7 +1422,7 @@ export default function TripPlanner() {
         {tab === "plan" && (
           <div style={styles.planLayout}>
             {/* Ideas Pool */}
-            <div style={{ ...styles.poolPanel, ...(dragOver === "pool" ? { borderColor: "#f59e0b", background: "#1a1500" } : {}), display: mobileView === "pool" ? "flex" : "none" }}
+            <div style={{ ...styles.poolPanel, ...(dragOver === "pool" ? { borderColor: "#f59e0b", background: "#1a1500" } : {}), display: isMobile ? (mobileView === "pool" ? "flex" : "none") : "flex" }}
               data-dropzone="pool"
               onDragOver={e => { e.preventDefault(); setDragOver("pool"); }}
               onDragLeave={() => setDragOver(null)}
@@ -1442,7 +1445,7 @@ export default function TripPlanner() {
             </div>
 
             {/* Day Schedule */}
-            <div style={{ ...styles.schedulePanel, display: mobileView === "schedule" ? "flex" : "none" }}>
+            <div style={{ ...styles.schedulePanel, display: isMobile ? (mobileView === "schedule" ? "flex" : "none") : "flex" }}>
               {/* Day tabs */}
               <div style={styles.dayTabs}>
                 {tripDates.map(d => (
@@ -1542,7 +1545,7 @@ export default function TripPlanner() {
         )}
 
         {/* Mobile bottom nav — all 4 tabs */}
-        <div className="mobile-nav" style={styles.mobileNav}>
+        <div style={{ ...styles.mobileNav, display: isMobile ? "flex" : "none" }}>
           <button style={{ ...styles.mnavBtn, ...(tab==="plan" && mobileView==="pool" ? styles.mnavActive : {}) }}
             onClick={() => { setTab("plan"); setMobileView("pool"); }}>
             <span style={{ fontSize: 22 }}>💡</span>
