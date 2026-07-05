@@ -1155,24 +1155,16 @@ export default function TripPlanner() {
         input,select,textarea{color-scheme:light;font-family:'DM Sans',sans-serif;}
         a{color:inherit;}
         button{-webkit-tap-highlight-color:transparent;}
-        /* Mobile: sidebar/panel toggle */
+        /* Sidebar/panel — toggled by bottom nav on mobile */
         .sidebar{display:none!important;}
         .sidebar.show{display:flex!important;}
         .main-panel{display:none!important;}
         .main-panel.show{display:flex!important;}
+        /* Bottom nav always visible */
         .mobile-nav{display:flex!important;}
-        /* Always mobile layout — tabs handled by bottom nav */
+        /* Top tab bar hidden — bottom nav handles it */
         .tab-row-bar{display:none!important;}
-        .sidebar{display:none!important;}
-        .sidebar.show{display:flex!important;}
-        .main-panel{display:none!important;}
-        .main-panel.show{display:flex!important;}
-        .mobile-nav{display:flex!important;}
-          .main-panel{display:flex!important;}
-          .mobile-nav{display:none!important;}
-          .tab-row-bar{display:flex!important;}
-        }
-      `}</style>
+        `}</style>
 
       {/* Forms */}
       {(showForm || editIdea) && (
