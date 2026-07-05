@@ -1,12 +1,12 @@
 import React from 'react';
-
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STORAGE_KEY = "tripplanner-v2";
 
 const CATEGORIES = [
-  { id: "transport",    label: "Transport",    icon: "✈️",  color: "#1a3a8f" },
+  { id: "flight",       label: "Flight",       icon: "🛫",  color: "#0369a1" },
+  { id: "transport",    label: "Transport",    icon: "🚖",  color: "#1a3a8f" },
   { id: "food",         label: "Food & Drink", icon: "🍜",  color: "#e8672a" },
   { id: "activity",     label: "Activity",     icon: "🎯",  color: "#0ea5e9" },
   { id: "accommodation",label: "Stay",         icon: "🏨",  color: "#6366f1" },
@@ -54,10 +54,13 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
     title: "", category: "activity", date: "", checkOut: "", time: "",
     cost: "", currency: "SGD", place: "", mapsUrl: "", notes: "",
     paidBy: "", bookedStatus: "not-booked",
+    // Flight-specific
+    flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const isSchedulable = form.title && form.date;
   const isStay = form.category === "accommodation";
+  const isFlight = form.category === "flight";
 
   return (
     <div style={styles.overlay} onClick={onCancel}>
@@ -73,7 +76,8 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
           <div style={styles.formFull}>
             <label style={styles.label}>What is it? *</label>
             <input style={styles.input} placeholder="e.g. Peking duck lunch at Sheng Yong Xing"
-              value={form.title} onChange={e => set("title", e.target.value)} autoFocus />
+              value={form.title} onChange={e => set("title", e.target.value)} autoFocus
+              onKeyDown={e => { if (e.key === "Enter" && form.title.trim()) onSave({ ...form, id: idea?.id || uid() }); }} />
           </div>
 
           {/* Category */}
@@ -89,8 +93,45 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
             </div>
           </div>
 
-          {/* Date + Time — stays get check-in / check-out */}
-          {form.category === "accommodation" ? (
+          {/* Date + Time — flights, stays and regular items */}
+          {isFlight ? (
+            <>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Departure date</label>
+                <select style={styles.input} value={form.date} onChange={e => set("date", e.target.value)}>
+                  <option value="">Select date</option>
+                  {(tripDates || []).map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+                </select>
+              </div>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Departure time</label>
+                <input style={styles.input} type="time" value={form.time} onChange={e => set("time", e.target.value)} />
+              </div>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Flight number</label>
+                <input style={styles.input} placeholder="e.g. SQ321" value={form.flightNum || ""} onChange={e => set("flightNum", e.target.value)} />
+              </div>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Terminal</label>
+                <input style={styles.input} placeholder="e.g. T3" value={form.departTerminal || ""} onChange={e => set("departTerminal", e.target.value)} />
+              </div>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Arrival date</label>
+                <select style={styles.input} value={form.arrivalDate || ""} onChange={e => set("arrivalDate", e.target.value)}>
+                  <option value="">Select date</option>
+                  {(tripDates || []).map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
+                </select>
+              </div>
+              <div style={styles.formHalf}>
+                <label style={styles.label}>Arrival time</label>
+                <input style={styles.input} type="time" value={form.arrivalTime || ""} onChange={e => set("arrivalTime", e.target.value)} />
+              </div>
+              <div style={styles.formFull}>
+                <label style={styles.label}>Arrival airport / city</label>
+                <input style={styles.input} placeholder="e.g. Changi Airport T2, Singapore" value={form.arrivalAirport || ""} onChange={e => set("arrivalAirport", e.target.value)} />
+              </div>
+            </>
+          ) : form.category === "accommodation" ? (
             <>
               <div style={styles.formHalf}>
                 <label style={styles.label}>Check-in date</label>
@@ -269,11 +310,24 @@ function TripSetup({ onDone, savedTrip, onResume }) {
           <div>
             <label style={styles.label}>Who's coming?</label>
             <div style={{ display: "flex", gap: 8 }}>
-              <input style={{ ...styles.input, flex: 1 }} placeholder="Add a name" value={traveller}
+              <input style={{ ...styles.input, flex: 1 }} placeholder="Amanda, Jihan, Clara..." value={traveller}
                 onChange={e => setTraveller(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && traveller.trim()) { setTravellers(t => [...t, traveller.trim()]); setTraveller(""); } }} />
-              <button style={styles.btnPrimary} onClick={() => { if (traveller.trim()) { setTravellers(t => [...t, traveller.trim()]); setTraveller(""); } }}>Add</button>
+                onKeyDown={e => {
+                  if (e.key === "Enter" && traveller.trim()) {
+                    const names = traveller.split(",").map(n => n.trim()).filter(Boolean);
+                    setTravellers(t => [...t, ...names.filter(n => !t.includes(n))]);
+                    setTraveller("");
+                  }
+                }} />
+              <button style={styles.btnPrimary} onClick={() => {
+                if (traveller.trim()) {
+                  const names = traveller.split(",").map(n => n.trim()).filter(Boolean);
+                  setTravellers(t => [...t, ...names.filter(n => !t.includes(n))]);
+                  setTraveller("");
+                }
+              }}>Add</button>
             </div>
+            <p style={{ fontSize: 10, color: "#4a6fa5", marginTop: 4, fontFamily: "'Space Mono',monospace" }}>Separate multiple names with commas</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
               {travellers.map(t => (
                 <span key={t} style={styles.travChip}>{t}
@@ -928,6 +982,8 @@ export default function TripPlanner() {
   const [loaded, setLoaded] = useState(false);
   const [confirmNew, setConfirmNew] = useState(false);
   const [storyMode, setStoryMode] = useState("cards"); // "cards" | "map"
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsTraveller, setSettingsTraveller] = useState("");
   const [savedSnapshot, setSavedSnapshot] = useState(null); // last known saved state
   const ghostRef = useRef(null);
   const touchRef = useRef(null);
@@ -1093,17 +1149,22 @@ export default function TripPlanner() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;overflow:hidden;background:#deeaf7;font-family:'Space Mono',monospace;color:#1a3a8f;}
-        ::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
-        input,select,textarea{color-scheme:dark;}
+        html,body{height:100%;overflow:hidden;background:#deeaf7;font-family:'DM Sans',sans-serif;color:#1a3a8f;-webkit-font-smoothing:antialiased;}
+        ::-webkit-scrollbar{width:3px;height:3px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#a8c4e0;border-radius:4px;}
+        input,select,textarea{color-scheme:light;font-family:'DM Sans',sans-serif;}
         a{color:inherit;}
-        @media(max-width:640px){
-          .desktop-only{display:none!important;}
-          .sidebar{display:none!important;}
-          .sidebar.show{display:flex!important;}
-          .main-panel{display:none!important;}
-          .main-panel.show{display:flex!important;}
-          .mobile-nav{display:flex!important;}
+        button{-webkit-tap-highlight-color:transparent;}
+        /* Mobile: sidebar/panel toggle */
+        .sidebar{display:none!important;}
+        .sidebar.show{display:flex!important;}
+        .main-panel{display:none!important;}
+        .main-panel.show{display:flex!important;}
+        .mobile-nav{display:flex!important;}
+        /* Desktop: show both side by side */
+        @media(min-width:768px){
+          .sidebar{display:flex!important;}
+          .main-panel{display:flex!important;}
+          .mobile-nav{display:none!important;}
         }
       `}</style>
 
@@ -1139,32 +1200,92 @@ export default function TripPlanner() {
         </div>
       )}
 
+      {/* Trip settings modal — add/remove travellers anytime */}
+      {showSettings && trip && (
+        <div style={styles.overlay} onClick={() => setShowSettings(false)}>
+          <div style={{ ...styles.modal, maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <span style={{ fontSize: 20 }}>⚙️</span>
+              <span style={styles.modalTitle}>Trip Settings</span>
+              <button style={styles.closeBtn} onClick={() => setShowSettings(false)}>✕</button>
+            </div>
+            <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={styles.label}>Trip name</label>
+                <input style={styles.input} value={trip.name}
+                  onChange={e => setTrip(t => ({ ...t, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={styles.label}>Who's coming?</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...styles.input, flex: 1 }} placeholder="Add names, separate with commas"
+                    value={settingsTraveller}
+                    onChange={e => setSettingsTraveller(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && settingsTraveller.trim()) {
+                        const names = settingsTraveller.split(",").map(n => n.trim()).filter(Boolean);
+                        setTrip(t => ({ ...t, travellers: [...t.travellers, ...names.filter(n => !t.travellers.includes(n))] }));
+                        setSettingsTraveller("");
+                      }
+                    }} />
+                  <button style={styles.btnPrimary} onClick={() => {
+                    if (settingsTraveller.trim()) {
+                      const names = settingsTraveller.split(",").map(n => n.trim()).filter(Boolean);
+                      setTrip(t => ({ ...t, travellers: [...t.travellers, ...names.filter(n => !t.travellers.includes(n))] }));
+                      setSettingsTraveller("");
+                    }
+                  }}>Add</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {(trip.travellers || []).map(t => (
+                    <span key={t} style={styles.travChip}>{t}
+                      <button onClick={() => setTrip(tr => ({ ...tr, travellers: tr.travellers.filter(x => x !== t) }))}
+                        style={{ background: "none", border: "none", color: "#e8672a", cursor: "pointer", marginLeft: 4 }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ ...styles.modalFooter, justifyContent: "flex-end" }}>
+              <button style={styles.btnPrimary} onClick={() => setShowSettings(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={styles.app}>
         {/* Top bar */}
         <div style={styles.topbar}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
             <span style={styles.logo}>✈</span>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={styles.tripName}>{trip.name}</div>
-              <div style={styles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)} · {trip.travellers.join(", ") || "Solo"}</div>
+              <div style={styles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={styles.tabBar}>
-              {[["plan","📋 Plan"],["budget","💰 Budget"],["story","📱 Story"]].map(([id,label]) => (
-                <button key={id} style={{ ...styles.tabBtn, ...(tab === id ? styles.tabBtnActive : {}) }} onClick={() => setTab(id)}>{label}</button>
-              ))}
-            </div>
-            <button style={styles.btnPrimary} onClick={() => setShowForm(true)}>+ Idea</button>
-            <button
-              style={{ ...styles.saveBtn, ...(saveStatus === "saved" ? styles.saveBtnSaved : saveStatus === "error" ? styles.saveBtnError : {}) }}
-              onClick={manualSave}
-              title="Save trip"
-            >
-              {saveStatus === "saving" ? "⏳ Saving…" : saveStatus === "saved" ? "✓ Saved" : saveStatus === "error" ? "⚠ Retry" : "💾 Save"}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <button style={styles.iconAction} onClick={() => setShowForm(true)} title="Add idea">
+              <span style={{ fontSize: 18 }}>＋</span>
             </button>
-            <button style={{ ...styles.btnSecondary, fontSize: 11 }} onClick={() => setConfirmNew(true)}>＋ New trip</button>
+            <button
+              style={{ ...styles.iconAction, ...(saveStatus === "saved" ? { color: "#10b981" } : saveStatus === "error" ? { color: "#ef4444" } : {}) }}
+              onClick={manualSave} title="Save">
+              <span style={{ fontSize: 16 }}>{saveStatus === "saving" ? "⏳" : saveStatus === "saved" ? "✓" : "💾"}</span>
+            </button>
+            <button style={styles.iconAction} onClick={() => setShowSettings(true)} title="Settings">
+              <span style={{ fontSize: 16 }}>⚙️</span>
+            </button>
           </div>
+        </div>
+        {/* Tab bar — full width below topbar */}
+        <div style={styles.tabRowBar}>
+          {[["plan","📋","Plan"],["budget","💰","Budget"],["story","📱","Share"]].map(([id,icon,label]) => (
+            <button key={id} style={{ ...styles.tabRowBtn, ...(tab === id ? styles.tabRowBtnActive : {}) }}
+              onClick={() => { setTab(id); if(id==="plan") setMobileView("pool"); }}>
+              <span>{icon}</span><span>{label}</span>
+            </button>
+          ))}
+          <button style={{ ...styles.tabRowBtn, fontSize: 11, color: "#a8c4e0" }} onClick={() => setConfirmNew(true)}>＋ New</button>
         </div>
 
         {/* Main content area */}
@@ -1295,10 +1416,11 @@ export default function TripPlanner() {
 
         {/* Mobile bottom nav */}
         <div className="mobile-nav" style={styles.mobileNav}>
-          {[["pool","💡","Pool"],["schedule","🗓","Schedule"],["budget","💰","Budget"],["story","📱","Story"]].map(([id,icon,label]) => (
-            <button key={id} style={{ ...styles.mnavBtn, ...(mobileView === id || (tab === "budget" && id === "budget") || (tab === "story" && id === "story") ? styles.mnavActive : {}) }}
-              onClick={() => { if (id === "budget") { setTab("budget"); } else if (id === "story") { setTab("story"); } else { setTab("plan"); setMobileView(id); } }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>{label}
+          {[["pool","💡","Ideas"],["schedule","🗓","Plan"]].map(([id,icon,label]) => (
+            <button key={id} style={{ ...styles.mnavBtn, ...(tab==="plan" && mobileView === id ? styles.mnavActive : {}) }}
+              onClick={() => { setTab("plan"); setMobileView(id); }}>
+              <span style={{ fontSize: 22 }}>{icon}</span>
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -1309,19 +1431,23 @@ export default function TripPlanner() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = {
-  app: { height: "100vh", display: "flex", flexDirection: "column", background: "#deeaf7", overflow: "hidden" },
-  topbar: { background: "#1a3a8f", borderBottom: "1px solid #1230a0", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexShrink: 0, flexWrap: "wrap" },
+  app: { height: "100dvh", display: "flex", flexDirection: "column", background: "#deeaf7", overflow: "hidden" },
+  topbar: { background: "#1a3a8f", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  tabRowBar: { background: "#0f2470", display: "flex", borderBottom: "1px solid #1230a0", flexShrink: 0 },
+  tabRowBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#a8c4e0", fontSize: 11, fontFamily: "'Space Mono',monospace", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "all .2s", borderBottom: "2px solid transparent" },
+  tabRowBtnActive: { color: "#f5e882", borderBottomColor: "#e8672a" },
+  iconAction: { background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", transition: "background .2s" },
   logo: { fontSize: 24, background: "#e8672a", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   tripName: { fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 15, color: "#f5e882" },
-  tripMeta: { fontSize: 10, color: "#a8c4e0", marginTop: 1, fontFamily: "'Space Mono',monospace" },
+  tripMeta: { fontSize: 10, color: "#a8c4e0", marginTop: 1, fontFamily: "'DM Sans',sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   tabBar: { display: "flex", background: "#0f2470", borderRadius: 10, padding: 3, gap: 2 },
-  tabBtn: { padding: "6px 12px", borderRadius: 8, border: "none", background: "none", color: "#a8c4e0", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap" },
+  tabBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: "#a8c4e0", fontSize: 10, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap" },
   tabBtnActive: { background: "#e8672a", color: "#fff", fontWeight: 700 },
-  btnPrimary: { background: "#e8672a", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap" },
-  btnSecondary: { background: "#deeaf7", color: "#1a3a8f", border: "1px solid #a8c4e0", borderRadius: 8, padding: "8px 14px", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap" },
+  btnPrimary: { background: "#e8672a", color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" },
+  btnSecondary: { background: "#deeaf7", color: "#1a3a8f", border: "1px solid #a8c4e0", borderRadius: 12, padding: "12px 18px", fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" },
 
   planLayout: { flex: 1, display: "flex", overflow: "hidden" },
-  poolPanel: { width: 320, flexShrink: 0, background: "#c8dff5", borderRight: "1px solid #a8c4e0", display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s", border: "1px solid transparent" },
+  poolPanel: { width: "min(320px, 100%)", flexShrink: 0, background: "#c8dff5", borderRight: "1px solid #a8c4e0", display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s" },
   schedulePanel: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
   panelHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
   panelTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 16, color: "#1a3a8f" },
@@ -1342,7 +1468,7 @@ const styles = {
 
   dropHint: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontSize: 12, textAlign: "center", border: "2px dashed #a8c4e0", borderRadius: 12, margin: 8, padding: 32, fontFamily: "'Space Mono',monospace" },
 
-  ideaCard: { background: "#fff", border: "1px solid #c8dff5", borderLeft: "3px solid #555", borderRadius: 10, padding: "10px 12px", cursor: "grab", touchAction: "none", userSelect: "none", transition: "border-color .2s" },
+  ideaCard: { background: "#fff", border: "1px solid #deeaf7", borderLeft: "3px solid #555", borderRadius: 14, padding: "12px 14px", cursor: "grab", touchAction: "none", userSelect: "none", transition: "all .2s", boxShadow: "0 1px 4px rgba(26,58,143,0.06)" },
   ideaTitle: { fontSize: 13, color: "#1a3a8f", fontWeight: 500, lineHeight: 1.4, fontFamily: "'DM Sans',sans-serif" },
   ideaMeta: { fontSize: 11, color: "#4a6fa5", marginTop: 3, lineHeight: 1.4, fontFamily: "'DM Sans',sans-serif" },
   tag: { fontSize: 10, background: "#deeaf7", color: "#1a3a8f", borderRadius: 6, padding: "2px 6px" },
@@ -1403,7 +1529,7 @@ const styles = {
 
   // Forms
   overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" },
-  modal: { background: "#fff", border: "1px solid #a8c4e0", borderRadius: 16, width: "min(100%, 540px)", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" },
+  modal: { background: "#fff", border: "1px solid #a8c4e0", borderRadius: 20, width: "min(calc(100vw - 24px), 540px)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" },
   modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid #deeaf7", flexShrink: 0, background: "#1a3a8f" },
   modalTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 18, color: "#f5e882", flex: 1 },
   closeBtn: { background: "none", border: "none", color: "#a8c4e0", cursor: "pointer", fontSize: 18, lineHeight: 1 },
@@ -1412,7 +1538,7 @@ const styles = {
   formHalf: { display: "flex", flexDirection: "column", gap: 4, flex: 1 },
   modalFooter: { display: "flex", alignItems: "center", padding: "12px 20px", borderTop: "1px solid #deeaf7", gap: 8, flexShrink: 0, background: "#f0f6ff" },
   label: { fontSize: 10, color: "#4a6fa5", textTransform: "uppercase", letterSpacing: ".5px", fontWeight: 700, fontFamily: "'Space Mono',monospace" },
-  input: { background: "#f0f6ff", border: "1px solid #a8c4e0", borderRadius: 8, padding: "9px 12px", fontSize: 12, color: "#1a3a8f", fontFamily: "'Space Mono',monospace", outline: "none", width: "100%", transition: "border-color .2s" },
+  input: { background: "#f0f6ff", border: "1.5px solid #a8c4e0", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#1a3a8f", fontFamily: "'DM Sans',sans-serif", outline: "none", width: "100%", transition: "border-color .2s", WebkitAppearance: "none" },
   catChip: { border: "none", borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", transition: "all .2s" },
 
   // Trip setup
@@ -1430,7 +1556,7 @@ const styles = {
   saveBtnError: { background: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5" },
 
   // Mobile nav
-  mobileNav: { background: "#1a3a8f", borderTop: "1px solid #1230a0", display: "none", flexShrink: 0 },
-  mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#6b8cbf", fontSize: 9, fontFamily: "'Space Mono',monospace", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
-  mnavActive: { color: "#f5e882" },
+  mobileNav: { background: "#fff", borderTop: "1px solid #deeaf7", display: "none", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom, 0px)" },
+  mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#a8c4e0", fontSize: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 500, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
+  mnavActive: { color: "#1a3a8f" },
 };
