@@ -1161,11 +1161,13 @@ export default function TripPlanner() {
         .main-panel{display:none!important;}
         .main-panel.show{display:flex!important;}
         .mobile-nav{display:flex!important;}
-        /* Hide top tab bar on mobile — bottom nav handles it */
+        /* Always mobile layout — tabs handled by bottom nav */
         .tab-row-bar{display:none!important;}
-        /* Desktop: show both side by side, top tabs, no bottom nav */
-        @media(min-width:1024px){
-          .sidebar{display:flex!important;}
+        .sidebar{display:none!important;}
+        .sidebar.show{display:flex!important;}
+        .main-panel{display:none!important;}
+        .main-panel.show{display:flex!important;}
+        .mobile-nav{display:flex!important;}
           .main-panel{display:flex!important;}
           .mobile-nav{display:none!important;}
           .tab-row-bar{display:flex!important;}
