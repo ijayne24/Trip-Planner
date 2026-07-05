@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STORAGE_KEY = "tripplanner-v2";
+const TRIPS_INDEX_KEY = "tripplanner-trips-index";
 
 const CATEGORIES = [
   { id: "flight",       label: "Flight",       icon: "🛫",  color: "#0369a1" },
@@ -260,6 +261,81 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
     </div>
   );
 }
+
+
+// ─── TripDashboard ────────────────────────────────────────────────────────────
+function TripDashboard({ onSelect, onNew }) {
+  const [trips, setTrips] = React.useState([]);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TRIPS_INDEX_KEY);
+      if (raw) setTrips(JSON.parse(raw));
+    } catch {}
+    setLoaded(true);
+  }, []);
+
+  if (!loaded) return null;
+
+  return (
+    <div style={dashStyles.screen}>
+      <div style={dashStyles.header}>
+        <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 28, color: "#f5e882" }}>{"✈️"} Trip Planner</div>
+        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#a8c4e0", marginTop: 4 }}>Your trips</div>
+      </div>
+
+      <div style={dashStyles.body}>
+        {trips.length === 0 && (
+          <div style={dashStyles.empty}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>{"🗺️"}</div>
+            <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 20, color: "#1a3a8f", marginBottom: 8 }}>No trips yet!</div>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "#4a6fa5" }}>Create your first trip below</div>
+          </div>
+        )}
+        {trips.map(trip => (
+          <div key={trip.id} style={dashStyles.tripCard} onClick={() => onSelect(trip.id)}>
+            <div style={dashStyles.tripCardLeft}>
+              <div style={dashStyles.tripIcon}>{"✈️"}</div>
+            </div>
+            <div style={dashStyles.tripCardBody}>
+              <div style={dashStyles.tripName}>{trip.name}</div>
+              <div style={dashStyles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
+              <div style={dashStyles.tripStats}>
+                <span style={dashStyles.tripStat}>{"👥"} {trip.travellers?.length || 0} travellers</span>
+                <span style={dashStyles.tripStat}>{"📍"} {trip.ideaCount || 0} stops</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 20, color: "#a8c4e0" }}>›</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={dashStyles.footer}>
+        <button style={dashStyles.newBtn} onClick={onNew}>
+          {"＋"} Plan a New Trip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const dashStyles = {
+  screen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 50%, #deeaf7 100%)", display: "flex", flexDirection: "column" },
+  header: { padding: "56px 24px 24px", textAlign: "center" },
+  body: { flex: 1, padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" },
+  empty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", textAlign: "center" },
+  tripCard: { background: "#fff", borderRadius: 16, padding: "16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", boxShadow: "0 2px 12px rgba(26,58,143,0.1)", transition: "transform .15s", active: { transform: "scale(0.98)" } },
+  tripCardLeft: { flexShrink: 0 },
+  tripIcon: { width: 48, height: 48, background: "#deeaf7", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 },
+  tripCardBody: { flex: 1, minWidth: 0 },
+  tripName: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1a3a8f", marginBottom: 2 },
+  tripMeta: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#4a6fa5", marginBottom: 6 },
+  tripStats: { display: "flex", gap: 10 },
+  tripStat: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#a8c4e0" },
+  footer: { padding: "16px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))", background: "transparent" },
+  newBtn: { width: "100%", padding: "16px", background: "#e8672a", color: "#fff", border: "none", borderRadius: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer" },
+};
 
 // ─── TripSetup screen ─────────────────────────────────────────────────────────
 function TripSetup({ onDone, savedTrip, onResume }) {
@@ -970,6 +1046,8 @@ function StoryView({ trip, ideas }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function TripPlanner() {
+  const [screen, setScreen] = useState("dashboard"); // "dashboard" | "setup" | "app"
+  const [currentTripId, setCurrentTripId] = useState(null);
   const [trip, setTrip] = useState(null);
   const [ideas, setIdeas] = useState([]);
   const [tab, setTab] = useState("plan");
@@ -998,7 +1076,13 @@ export default function TripPlanner() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const s = JSON.parse(raw);
-          if (s.trip) { setTrip(s.trip); setActiveDay(s.trip.dates?.[0] || null); setSavedSnapshot(s); }
+          if (s.trip) {
+            setTrip(s.trip);
+            setCurrentTripId(s.trip.id || "default");
+            setActiveDay(s.trip.dates?.[0] || null);
+            setSavedSnapshot(s);
+            setScreen("app");
+          }
           if (s.ideas) setIdeas(s.ideas);
         }
       } catch {}
@@ -1017,6 +1101,7 @@ export default function TripPlanner() {
     const t = setTimeout(async () => {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ trip, ideas }));
+        if (trip) saveToIndex(trip, ideas);
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus(""), 2500);
       } catch { setSaveStatus("error"); }
@@ -1035,10 +1120,23 @@ export default function TripPlanner() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
 
+  const saveToIndex = (t, i) => {
+    try {
+      const raw = localStorage.getItem(TRIPS_INDEX_KEY);
+      const index = raw ? JSON.parse(raw) : [];
+      const entry = { id: t.id || "default", name: t.name, start: t.start, end: t.end, travellers: t.travellers, ideaCount: i.filter(x => x.date).length };
+      const exists = index.findIndex(x => x.id === entry.id);
+      if (exists > -1) index[exists] = entry;
+      else index.unshift(entry);
+      localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(index));
+    } catch {}
+  };
+
   const manualSave = async () => {
     setSaveStatus("saving");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ trip, ideas }));
+      if (trip) saveToIndex(trip, ideas);
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(""), 2500);
     } catch { setSaveStatus("error"); }
@@ -1136,13 +1234,43 @@ export default function TripPlanner() {
     onTouchEnd,
   });
 
-  if (!loaded) return <div style={{ background: "#0e0e0e", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>Loading…</div>;
-  if (!trip) return <TripSetup
-    onDone={(t) => { const dates = dateRange(t.start, t.end); const tripObj = { ...t, dates }; setTrip(tripObj); setActiveDay(dates[0]); }}
-    savedTrip={savedSnapshot?.trip || null}
-    onResume={() => {
-      if (savedSnapshot?.trip) { setTrip(savedSnapshot.trip); setIdeas(savedSnapshot.ideas || []); setActiveDay(savedSnapshot.trip.dates?.[0] || null); }
+  if (!loaded) return <div style={{ background: "#deeaf7", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
+
+  if (screen === "dashboard") return (
+    <TripDashboard
+      onSelect={(id) => {
+        // For now just load the current saved trip
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const s = JSON.parse(raw);
+            if (s.trip) { setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null); }
+          }
+        } catch {}
+        setScreen("app");
+      }}
+      onNew={() => { setTrip(null); setIdeas([]); setScreen("setup"); }}
+    />
+  );
+
+  if (screen === "setup") return <TripSetup
+    onDone={(t) => {
+      const dates = dateRange(t.start, t.end);
+      const tripObj = { ...t, id: uid(), dates };
+      setTrip(tripObj);
+      setIdeas([]);
+      setActiveDay(dates[0]);
+      // Save to trips index
+      try {
+        const raw = localStorage.getItem("tripplanner-trips-index");
+        const existing = raw ? JSON.parse(raw) : [];
+        const updated = [{ id: tripObj.id, name: tripObj.name, start: tripObj.start, end: tripObj.end, travellers: tripObj.travellers, ideaCount: 0 }, ...existing.filter(t => t.id !== tripObj.id)];
+        localStorage.setItem("tripplanner-trips-index", JSON.stringify(updated));
+      } catch {}
+      setScreen("app");
     }}
+    savedTrip={null}
+    onResume={null}
   />;
 
   return (
@@ -1189,9 +1317,8 @@ export default function TripPlanner() {
               <button style={styles.btnSecondary} onClick={() => setConfirmNew(false)}>Cancel</button>
               <button style={{ ...styles.btnPrimary, background: "#ef4444" }} onClick={() => {
                 setSavedSnapshot({ trip, ideas });
-                setTrip(null);
-                setIdeas([]);
                 setConfirmNew(false);
+                setScreen("dashboard");
               }}>Yes, start fresh</button>
             </div>
           </div>
@@ -1255,7 +1382,9 @@ export default function TripPlanner() {
         {/* Top bar */}
         <div style={styles.topbar}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-            <span style={styles.logo}>✈</span>
+            <button onClick={() => { manualSave(); setScreen("dashboard"); }}
+              style={{ ...styles.logo, cursor: "pointer", border: "none" }}
+              title="Back to all trips">✈</button>
             <div style={{ minWidth: 0 }}>
               <div style={styles.tripName}>{trip.name}</div>
               <div style={styles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
@@ -1283,14 +1412,14 @@ export default function TripPlanner() {
               <span>{icon}</span><span>{label}</span>
             </button>
           ))}
-          <button style={{ ...styles.tabRowBtn, fontSize: 11, color: "#a8c4e0" }} onClick={() => setConfirmNew(true)}>＋ New</button>
+          <button style={{ ...styles.tabRowBtn, fontSize: 11, color: "#a8c4e0" }} onClick={() => setScreen("dashboard")}>🏠 Home</button>
         </div>
 
         {/* Main content area */}
         {tab === "plan" && (
           <div style={styles.planLayout}>
             {/* Ideas Pool */}
-            <div className={`sidebar${mobileView === "pool" ? " show" : ""}`} style={{ ...styles.poolPanel, ...(dragOver === "pool" ? { borderColor: "#f59e0b", background: "#1a1500" } : {}) }}
+            <div style={{ ...styles.poolPanel, ...(dragOver === "pool" ? { borderColor: "#f59e0b", background: "#1a1500" } : {}), display: mobileView === "pool" ? "flex" : "none" }}
               data-dropzone="pool"
               onDragOver={e => { e.preventDefault(); setDragOver("pool"); }}
               onDragLeave={() => setDragOver(null)}
@@ -1313,7 +1442,7 @@ export default function TripPlanner() {
             </div>
 
             {/* Day Schedule */}
-            <div className={`main-panel${mobileView === "schedule" ? " show" : ""}`} style={styles.schedulePanel}>
+            <div style={{ ...styles.schedulePanel, display: mobileView === "schedule" ? "flex" : "none" }}>
               {/* Day tabs */}
               <div style={styles.dayTabs}>
                 {tripDates.map(d => (
