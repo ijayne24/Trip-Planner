@@ -272,11 +272,17 @@ function TripSetup({ onDone, savedTrip, onResume }) {
 
   return (
     <div style={styles.setupScreen}>
+      {/* Gradient hero area */}
+      <div style={{ width: "100%", maxWidth: 480 }}>
+        <div style={{ padding: "48px 24px 32px", textAlign: "center" }}>
+          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 32, color: "#f5e882", marginBottom: 4 }}>Trip Planner</div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#a8c4e0" }}>Plan. Share. Explore.</div>
+        </div>
       <div style={styles.setupCard}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 48 }}>✈️</div>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 52, marginBottom: 8 }}>✈️</div>
           <h1 style={styles.setupTitle}>Plan a Trip</h1>
-          <p style={{ color: "#666", fontSize: 14, marginTop: 6 }}>Let's start with the basics</p>
+          <p style={{ color: "#4a6fa5", fontSize: 14, marginTop: 6, fontFamily: "'DM Sans',sans-serif" }}>Let's start with the basics</p>
         </div>
         {savedTrip && (
           <div style={{ background: "#1a1500", border: "1px solid #f59e0b44", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
@@ -291,7 +297,7 @@ function TripSetup({ onDone, savedTrip, onResume }) {
             <label style={styles.label}>Trip name</label>
             <input style={styles.input} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. China 2026" />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <label style={styles.label}>Start date</label>
               <input style={styles.input} type="date" value={start} onChange={e => setStart(e.target.value)} />
@@ -338,11 +344,12 @@ function TripSetup({ onDone, savedTrip, onResume }) {
           </div>
         </div>
 
-        <button style={{ ...styles.btnPrimary, width: "100%", marginTop: 24, padding: "14px", fontSize: 15 }}
+        <button style={{ ...styles.btnPrimary, width: "100%", marginTop: 28, padding: "16px", fontSize: 16, borderRadius: 16 }}
           disabled={!name || !start || !end}
           onClick={() => onDone({ name, start, end, travellers, currency })}>
           Start Planning →
         </button>
+      </div>
       </div>
     </div>
   );
@@ -1542,8 +1549,8 @@ const styles = {
   catChip: { border: "none", borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", transition: "all .2s" },
 
   // Trip setup
-  setupScreen: { height: "100vh", background: "linear-gradient(135deg, #1a3a8f 0%, #a8c4e0 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
-  setupCard: { background: "#fff", border: "1px solid #a8c4e0", borderRadius: 20, padding: 32, width: "min(100%, 480px)", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(26,58,143,.2)" },
+  setupScreen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 60%, #a8c4e0 100%)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "0" },
+  setupCard: { background: "#fff", borderRadius: "0 0 28px 28px", padding: "40px 24px 40px", width: "100%", maxWidth: 480, overflowY: "auto", boxShadow: "0 8px 40px rgba(26,58,143,.2)" },
   setupTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 28, color: "#1a3a8f", marginTop: 8 },
   travChip: { background: "#deeaf7", color: "#1a3a8f", borderRadius: 20, padding: "4px 12px", fontSize: 11, display: "flex", alignItems: "center", fontFamily: "'Space Mono',monospace" },
 
