@@ -1069,6 +1069,17 @@ export default function TripPlanner() {
   const stateRef = useRef({ ideas, trip });
   stateRef.current = { ideas, trip };
 
+  // Force correct mobile viewport scaling
+  useEffect(() => {
+    let meta = document.querySelector("meta[name=viewport]");
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+    }
+    meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
+  }, []);
+
   // Storage
   useEffect(() => {
     async function load() {
@@ -1234,8 +1245,14 @@ export default function TripPlanner() {
     onTouchEnd,
   });
 
-  // Detect mobile via JS — more reliable than CSS media queries in webviews
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 1024;
+  // Responsive width tracking — updates on resize
+  const [windowWidth, setWindowWidth] = useState(typeof window !== "undefined" ? window.innerWidth : 375);
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  const isMobile = windowWidth < 1024;
 
   if (!loaded) return <div style={{ background: "#deeaf7", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
 
