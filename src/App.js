@@ -685,47 +685,47 @@ function exportStoryHTML(trip, ideas) {
 <html><head><meta charset="utf-8"/>
 <title>${trip.name} – Itinerary</title>
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:#f0f6ff;color:#1a3a8f;padding:0;display:flex;flex-direction:column;gap:0;}
-@media print{.cover-card,.day-card{break-inside:avoid;page-break-after:always;}}
+body{font-family:'DM Sans',sans-serif;background:#eaf3fc;color:#1a3a8f;padding:0 0 32px;}
 
 /* Cover */
-.cover-card{width:100%;background:linear-gradient(160deg,#0f2470 0%,#1a3a8f 40%,#2a5298 100%);border-radius:0;overflow:hidden;}
-.cover-inner{padding:48px 24px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;}
-.cover-plane{width:64px;height:64px;background:#f59e0b;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:8px;}
-.cover-title{font-family:'Pacifico',cursive;font-size:28px;color:#f5e882;line-height:1.3;}
-.cover-dates{font-size:14px;color:#f59e0b;}
-.cover-meta{font-size:12px;color:#666;}
-.cover-travellers{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px;}
-.traveller{font-size:12px;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:20px;padding:4px 12px;}
-.legend{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;margin-top:16px;padding-top:16px;border-top:1px solid #333;}
-.legend-item{font-size:10px;color:#888;}
+.cover-card{width:100%;background:linear-gradient(160deg,#0f2470 0%,#1a3a8f 40%,#2a5298 100%);overflow:hidden;margin-bottom:12px;}
+.cover-inner{padding:52px 24px 44px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;}
+.cover-plane{width:72px;height:72px;background:#e8672a;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:4px;}
+.cover-title{font-family:'Pacifico',cursive;font-size:32px;color:#f5e882;line-height:1.3;}
+.cover-dates{font-size:15px;color:rgba(255,255,255,0.8);font-weight:500;}
+.cover-meta{font-size:13px;color:rgba(255,255,255,0.5);}
+.cover-travellers{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px;}
+.traveller{font-size:13px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:20px;padding:6px 16px;font-weight:500;}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);}
+.legend-item{font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px;}
 
-/* Day cards */
-.day-card{width:100%;background:#fff;border-radius:0;overflow:hidden;border-bottom:8px solid #f0f6ff;}
-.day-header{padding:14px 20px 10px;background:#1a3a8f;display:flex;align-items:baseline;justify-content:space-between;}
-.day-num{font-family:'Pacifico',cursive;font-size:22px;color:#f5e882;margin-right:10px;}
-.day-date{font-size:13px;color:#888;}
-.day-trip{font-size:10px;color:#444;}
-.stay-banner{display:flex;align-items:center;gap:10px;background:#f3f0ff;border-bottom:1px solid #e0d9ff;padding:10px 20px;}
-.stay-name{font-size:12px;color:#1a3a8f;font-weight:600;font-family:'DM Sans',sans-serif;}
-.stay-place{font-size:11px;color:#a78bfa;}
+/* Day cards — match app style */
+.day-card{background:#fff;border-radius:20px;overflow:hidden;margin:0 12px 12px;box-shadow:0 2px 16px rgba(26,58,143,0.08);}
+.day-header{padding:16px 20px 12px;background:#1a3a8f;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+.day-num{font-family:'Pacifico',cursive;font-size:24px;color:#f5e882;margin-right:8px;}
+.day-date{font-size:13px;color:#a8c4e0;}
+.day-trip{font-size:11px;color:rgba(168,196,224,0.7);}
+.stay-banner{display:flex;align-items:center;gap:12px;background:#f0f6ff;border-bottom:1px solid #a8c4e0;padding:14px 20px;}
+.stay-name{font-size:14px;color:#1a3a8f;font-weight:600;}
+.stay-place{font-size:12px;color:#4a6fa5;margin-top:2px;}
 .stops{padding:16px 20px;display:flex;flex-direction:column;}
-.stop-row{display:flex;gap:12px;}
-.stop-spine{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0;}
-.stop-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000;flex-shrink:0;z-index:1;}
-.stop-line{width:2px;flex:1;background:#e5e7eb;min-height:12px;margin-top:2px;}
+.stop-row{display:flex;gap:14px;}
+.stop-spine{display:flex;flex-direction:column;align-items:center;width:32px;flex-shrink:0;}
+.stop-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;z-index:1;}
+.stop-line{width:2px;flex:1;background:#deeaf7;min-height:16px;margin-top:3px;}
 .stop-body{flex:1;}
-.stop-body-mb{padding-bottom:12px;}
-.stop-title{font-size:13px;color:#1a3a8f;font-weight:500;line-height:1.4;font-family:'DM Sans',sans-serif;}
-.stop-place{font-size:11px;color:#888;margin-top:2px;}
-.stop-notes{font-size:11px;color:#aaa;margin-top:2px;font-style:italic;line-height:1.4;}
-.stop-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;align-items:center;}
-.chip{font-size:10px;background:#f3f4f6;color:#666;border-radius:6px;padding:2px 7px;}
-.chip-cost{color:#d97706;}
-.map-btn{font-size:10px;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:6px;padding:2px 8px;text-decoration:none;white-space:nowrap;}
-.day-footer{padding:10px 20px;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;background:#fafafa;font-size:10px;color:#aaa;}
+.stop-body-mb{padding-bottom:16px;}
+.stop-title{font-size:15px;color:#1a3a8f;font-weight:600;line-height:1.4;}
+.stop-place{font-size:13px;color:#4a6fa5;margin-top:4px;}
+.stop-notes{font-size:13px;color:#78909c;margin-top:4px;font-style:italic;line-height:1.5;}
+.stop-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
+.chip{font-size:13px;background:#f0f6ff;color:#1a3a8f;border-radius:8px;padding:4px 10px;border:1px solid #deeaf7;}
+.chip-cost{color:#e8672a;background:#fff5f0;border-color:#ffd0b5;}
+.map-btn{font-size:13px;background:#e8672a;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;}
+.day-footer{padding:12px 20px;border-top:1px solid #f0f6ff;display:flex;justify-content:space-between;background:#fafcff;font-size:12px;color:#a8c4e0;}
 </style></head>
 <body>
 
