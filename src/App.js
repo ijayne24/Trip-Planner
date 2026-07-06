@@ -246,8 +246,27 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
           </div>
           {!compact && idea.place && <div style={styles.ideaMeta}>📍 {idea.place}</div>}
           {!compact && idea.notes && <div style={{ ...styles.ideaMeta, fontStyle: "italic" }}>{idea.notes}</div>}
+          {/* Flight-specific details */}
+          {idea.category === "flight" && (idea.time || idea.arrivalTime || idea.arrivalAirport) && (
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+              {idea.time && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ ...styles.tag, background: "#deeaf7", color: "#0369a1", fontWeight: 600 }}>
+                    🛫 Departs {idea.time}{idea.departTerminal ? ` · ${idea.departTerminal}` : ""}{idea.flightNum ? ` · ${idea.flightNum}` : ""}
+                  </span>
+                </div>
+              )}
+              {(idea.arrivalTime || idea.arrivalAirport) && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ ...styles.tag, background: "#deeaf7", color: "#0369a1", fontWeight: 600 }}>
+                    🛬 Arrives {idea.arrivalTime ? `${idea.arrivalTime} · ` : ""}{idea.arrivalAirport || ""}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            {idea.time && <span style={styles.tag}>🕐 {idea.time}</span>}
+            {idea.category !== "flight" && idea.time && <span style={styles.tag}>🕐 {idea.time}</span>}
             {idea.cost && <span style={styles.tag}>💰 {idea.cost} {idea.currency}</span>}
             {idea.paidBy && <span style={styles.tag}>👤 {idea.paidBy}</span>}
             {idea.mapsUrl && <a href={idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag} onClick={e => e.stopPropagation()}>🗺 Map</a>}
