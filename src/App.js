@@ -54,7 +54,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea || {
     title: "", category: "activity", date: "", checkOut: "", time: "",
     cost: "", currency: "SGD", place: "", mapsUrl: "", notes: "",
-    paidBy: "", bookedStatus: "not-booked",
+    paidBy: "", splitBetween: [], bookedStatus: "not-booked",
     // Flight-specific
     flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
   });
@@ -167,7 +167,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
 
           {/* Cost */}
           <div style={styles.formHalf}>
-            <label style={styles.label}>Est. Cost (per person)</label>
+            <label style={styles.label}>Total Cost</label>
             <input style={styles.input} type="number" placeholder="0" value={form.cost} onChange={e => set("cost", e.target.value)} />
           </div>
           <div style={styles.formHalf}>
@@ -184,6 +184,42 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
               <option value="">—</option>
               {(travellers || []).map(t => <option key={t}>{t}</option>)}
             </select>
+          </div>
+
+          {/* Split between */}
+          <div style={styles.formFull}>
+            <label style={styles.label}>Split between</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
+              {(travellers || []).length === 0 && <span style={{ fontSize: 12, color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Add travellers to your trip first</span>}
+              {(travellers || []).map(t => {
+                const selected = form.splitBetween?.includes(t) ?? false;
+                return (
+                  <button key={t} type="button"
+                    style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500,
+                      background: selected ? "#1a3a8f" : "#f0f6ff",
+                      color: selected ? "#fff" : "#1a3a8f",
+                      borderColor: selected ? "#1a3a8f" : "#a8c4e0" }}
+                    onClick={() => {
+                      const current = form.splitBetween || [];
+                      set("splitBetween", selected ? current.filter(x => x !== t) : [...current, t]);
+                    }}>
+                    {selected ? "✓ " : ""}{t}
+                  </button>
+                );
+              })}
+              {(travellers || []).length > 0 && (
+                <button type="button"
+                  style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid #a8c4e0", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", color: "#4a6fa5", background: "#f0f6ff" }}
+                  onClick={() => set("splitBetween", form.splitBetween?.length === travellers.length ? [] : [...travellers])}>
+                  {form.splitBetween?.length === travellers.length ? "Deselect all" : "Select all"}
+                </button>
+              )}
+            </div>
+            {form.cost && form.splitBetween?.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>
+                = {form.currency} {(parseFloat(form.cost) / form.splitBetween.length).toFixed(2)} per person ({form.splitBetween.length} pax)
+              </div>
+            )}
           </div>
           <div style={styles.formHalf}>
             <label style={styles.label}>Booking status</label>
@@ -267,7 +303,7 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             {idea.category !== "flight" && idea.time && <span style={styles.tag}>🕐 {idea.time}</span>}
-            {idea.cost && <span style={styles.tag}>💰 {idea.cost} {idea.currency}</span>}
+            {idea.cost && <span style={styles.tag}>💰 {idea.cost} {idea.currency}{idea.splitBetween?.length > 0 ? ` ÷${idea.splitBetween.length}` : ""}</span>}
             {idea.paidBy && <span style={styles.tag}>👤 {idea.paidBy}</span>}
             {idea.mapsUrl && <a href={idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag} onClick={e => e.stopPropagation()}>🗺 Map</a>}
           </div>
@@ -299,61 +335,84 @@ function TripDashboard({ onSelect, onNew }) {
 
   return (
     <div style={dashStyles.screen}>
-      <div style={dashStyles.header}>
-        <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 28, color: "#f5e882" }}>{"✈️"} Trip Planner</div>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#a8c4e0", marginTop: 4 }}>Your trips</div>
+      {/* Coastal illustrated hero — cobalt blue with SVG shapes */}
+      <div style={dashStyles.hero}>
+        {/* Decorative SVG shapes */}
+        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 390 320" preserveAspectRatio="xMidYMid slice">
+          {/* Sun */}
+          <circle cx="320" cy="60" r="55" fill="#f5e882" opacity="0.9"/>
+          {/* Cloud shapes */}
+          <ellipse cx="60" cy="40" rx="45" ry="28" fill="white" opacity="0.15"/>
+          <ellipse cx="95" cy="30" rx="35" ry="22" fill="white" opacity="0.15"/>
+          {/* Wave 1 */}
+          <path d="M0 200 Q60 170 120 200 Q180 230 240 200 Q300 170 360 200 Q390 215 390 215 L390 320 L0 320 Z" fill="#e8672a" opacity="0.85"/>
+          {/* Wave 2 */}
+          <path d="M0 230 Q80 205 160 230 Q240 255 320 230 Q360 218 390 228 L390 320 L0 320 Z" fill="#c8dff5" opacity="0.6"/>
+          {/* Wave 3 */}
+          <path d="M0 260 Q100 240 200 260 Q300 280 390 255 L390 320 L0 320 Z" fill="#fff" opacity="0.9"/>
+          {/* Airplane */}
+          <text x="30" y="140" fontSize="36" opacity="0.9">✈️</text>
+          {/* Stars */}
+          <text x="200" y="50" fontSize="14" opacity="0.6">✦</text>
+          <text x="150" y="80" fontSize="10" opacity="0.4">✦</text>
+          <text x="260" y="90" fontSize="8" opacity="0.5">✦</text>
+        </svg>
+        <div style={dashStyles.heroContent}>
+          <div style={dashStyles.heroTitle}>Trip Planner</div>
+          <div style={dashStyles.heroSub}>Where do you want to go?</div>
+        </div>
       </div>
 
+      {/* Trip cards */}
       <div style={dashStyles.body}>
-        {trips.length === 0 && (
+        {trips.length === 0 ? (
           <div style={dashStyles.empty}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>{"🗺️"}</div>
-            <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 20, color: "#1a3a8f", marginBottom: 8 }}>No trips yet!</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "#4a6fa5" }}>Create your first trip below</div>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>{"🗺️"}</div>
+            <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 22, color: "#1a3a8f", marginBottom: 8 }}>No trips yet!</div>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "#4a6fa5" }}>Tap below to plan your first adventure</div>
           </div>
-        )}
-        {trips.map(trip => (
-          <div key={trip.id} style={dashStyles.tripCard} onClick={() => onSelect(trip.id)}>
-            <div style={dashStyles.tripCardLeft}>
+        ) : (
+          trips.map(trip => (
+            <div key={trip.id} style={dashStyles.tripCard} onClick={() => onSelect(trip.id)}>
               <div style={dashStyles.tripIcon}>{"✈️"}</div>
-            </div>
-            <div style={dashStyles.tripCardBody}>
-              <div style={dashStyles.tripName}>{trip.name}</div>
-              <div style={dashStyles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
-              <div style={dashStyles.tripStats}>
-                <span style={dashStyles.tripStat}>{"👥"} {trip.travellers?.length || 0} travellers</span>
-                <span style={dashStyles.tripStat}>{"📍"} {trip.ideaCount || 0} stops</span>
+              <div style={dashStyles.tripCardBody}>
+                <div style={dashStyles.tripName}>{trip.name}</div>
+                <div style={dashStyles.tripMeta}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
+                <div style={dashStyles.tripStats}>
+                  <span style={dashStyles.tripStat}>{"👥"} {trip.travellers?.length || 0}</span>
+                  <span style={dashStyles.tripStat}>{"📍"} {trip.ideaCount || 0} stops</span>
+                </div>
               </div>
+              <div style={{ fontSize: 22, color: "#a8c4e0", fontWeight: 300 }}>›</div>
             </div>
-            <div style={{ fontSize: 20, color: "#a8c4e0" }}>›</div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <div style={dashStyles.footer}>
-        <button style={dashStyles.newBtn} onClick={onNew}>
-          {"＋"} Plan a New Trip
-        </button>
+        <button style={dashStyles.newBtn} onClick={onNew}>＋ Plan a New Trip</button>
       </div>
     </div>
   );
 }
 
 const dashStyles = {
-  screen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 50%, #deeaf7 100%)", display: "flex", flexDirection: "column" },
-  header: { padding: "56px 24px 24px", textAlign: "center" },
-  body: { flex: 1, padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" },
-  empty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px", textAlign: "center" },
-  tripCard: { background: "#fff", borderRadius: 16, padding: "16px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", boxShadow: "0 2px 12px rgba(26,58,143,0.1)", transition: "transform .15s", active: { transform: "scale(0.98)" } },
-  tripCardLeft: { flexShrink: 0 },
-  tripIcon: { width: 48, height: 48, background: "#deeaf7", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 },
+  screen: { minHeight: "100dvh", background: "#f0f6ff", display: "flex", flexDirection: "column" },
+  hero: { position: "relative", background: "#1a3a8f", height: 300, overflow: "hidden", flexShrink: 0 },
+  heroContent: { position: "relative", zIndex: 2, padding: "56px 28px 0", textAlign: "left" },
+  heroTitle: { fontFamily: "'Pacifico',cursive", fontSize: 36, color: "#f5e882", lineHeight: 1.2 },
+  heroSub: { fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.8)", marginTop: 6 },
+  body: { flex: 1, padding: "20px 16px 8px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" },
+  empty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", textAlign: "center" },
+  tripCard: { background: "#fff", borderRadius: 20, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 2px 16px rgba(26,58,143,0.08)", borderLeft: "4px solid #e8672a" },
+  tripIcon: { width: 52, height: 52, background: "#deeaf7", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 },
   tripCardBody: { flex: 1, minWidth: 0 },
-  tripName: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1a3a8f", marginBottom: 2 },
+  tripName: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1a3a8f", marginBottom: 3 },
   tripMeta: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#4a6fa5", marginBottom: 6 },
-  tripStats: { display: "flex", gap: 10 },
-  tripStat: { fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "#a8c4e0" },
-  footer: { padding: "16px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))", background: "transparent" },
-  newBtn: { width: "100%", padding: "16px", background: "#e8672a", color: "#fff", border: "none", borderRadius: 16, fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer" },
+  tripStats: { display: "flex", gap: 12 },
+  tripStat: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#a8c4e0", background: "#f0f6ff", padding: "2px 8px", borderRadius: 10 },
+  footer: { padding: "16px", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" },
+  newBtn: { width: "100%", padding: "18px", background: "#e8672a", color: "#fff", border: "none", borderRadius: 18, fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(232,103,42,0.3)" },
 };
 
 // ─── TripSetup screen ─────────────────────────────────────────────────────────
@@ -448,7 +507,11 @@ function TripSetup({ onDone, savedTrip, onResume }) {
 function BudgetSheet({ ideas, travellers, currency }) {
   const costItems = ideas.filter(i => i.cost && parseFloat(i.cost) > 0);
   const total = costItems.reduce((s, i) => s + parseFloat(i.cost || 0), 0);
-  const perPerson = travellers.length > 0 ? total / travellers.length : total;
+  // Per person = sum of each item divided by its own split count
+  const perPerson = costItems.reduce((s, i) => {
+    const splitCount = i.splitBetween?.length || travellers.length || 1;
+    return s + parseFloat(i.cost || 0) / splitCount;
+  }, 0);
 
   const byDay = {};
   costItems.forEach(i => {
@@ -498,7 +561,14 @@ function BudgetSheet({ ideas, travellers, currency }) {
                         {item.bookedStatus === "booked" ? "✅ Booked" : item.bookedStatus === "need-to-book" ? "📋 Need to book" : "—"}
                       </span>
                     </td>
-                    <td style={{ ...styles.td, textAlign: "right", color: "#f59e0b", fontWeight: 600 }}>{fmtCurrency(parseFloat(item.cost), item.currency)}</td>
+                    <td style={{ ...styles.td, textAlign: "right" }}>
+                      <div style={{ color: "#e8672a", fontWeight: 600 }}>{fmtCurrency(parseFloat(item.cost), item.currency)}</div>
+                      {item.splitBetween?.length > 0 && (
+                        <div style={{ fontSize: 10, color: "#4a6fa5", marginTop: 2 }}>
+                          ÷{item.splitBetween.length} = {fmtCurrency(parseFloat(item.cost) / item.splitBetween.length, item.currency)}/pax
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -617,16 +687,14 @@ function exportStoryHTML(trip, ideas) {
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:#f0f6ff;color:#1a3a8f;padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:20px;}
-.print-hint{width:min(100%,420px);background:#fef9f0;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;font-size:12px;color:#92400e;text-align:center;}
-.print-hint strong{font-weight:700;}
-@media print{.print-hint{display:none;} body{background:#fff;padding:0;gap:0;} .cover-card,.day-card{break-inside:avoid;page-break-after:always;box-shadow:none;border:none;border-radius:0;margin:0;width:100%;max-width:100%;}}
+body{font-family:'DM Sans',sans-serif;background:#f0f6ff;color:#1a3a8f;padding:0;display:flex;flex-direction:column;gap:0;}
+@media print{.cover-card,.day-card{break-inside:avoid;page-break-after:always;}}
 
 /* Cover */
-.cover-card{width:min(100%,400px);background:linear-gradient(160deg,#1c1917 0%,#2d1f0a 60%,#1a1a2e 100%);border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.3);}
-.cover-inner{padding:40px 28px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;}
+.cover-card{width:100%;background:linear-gradient(160deg,#0f2470 0%,#1a3a8f 40%,#2a5298 100%);border-radius:0;overflow:hidden;}
+.cover-inner{padding:48px 24px 40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;}
 .cover-plane{width:64px;height:64px;background:#f59e0b;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:8px;}
-.cover-title{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:#fff;line-height:1.2;}
+.cover-title{font-family:'Pacifico',cursive;font-size:28px;color:#f5e882;line-height:1.3;}
 .cover-dates{font-size:14px;color:#f59e0b;}
 .cover-meta{font-size:12px;color:#666;}
 .cover-travellers{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px;}
@@ -635,9 +703,9 @@ body{font-family:'DM Sans',sans-serif;background:#f0f6ff;color:#1a3a8f;padding:2
 .legend-item{font-size:10px;color:#888;}
 
 /* Day cards */
-.day-card{width:min(100%,420px);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.1);}
-.day-header{padding:14px 20px 10px;background:#1c1917;display:flex;align-items:baseline;justify-content:space-between;}
-.day-num{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:#f59e0b;margin-right:10px;}
+.day-card{width:100%;background:#fff;border-radius:0;overflow:hidden;border-bottom:8px solid #f0f6ff;}
+.day-header{padding:14px 20px 10px;background:#1a3a8f;display:flex;align-items:baseline;justify-content:space-between;}
+.day-num{font-family:'Pacifico',cursive;font-size:22px;color:#f5e882;margin-right:10px;}
 .day-date{font-size:13px;color:#888;}
 .day-trip{font-size:10px;color:#444;}
 .stay-banner{display:flex;align-items:center;gap:10px;background:#f3f0ff;border-bottom:1px solid #e0d9ff;padding:10px 20px;}
@@ -660,7 +728,7 @@ body{font-family:'DM Sans',sans-serif;background:#f0f6ff;color:#1a3a8f;padding:2
 .day-footer{padding:10px 20px;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;background:#fafafa;font-size:10px;color:#aaa;}
 </style></head>
 <body>
-<div class="print-hint">💡 <strong>To save as PDF:</strong> Press Cmd+P (Mac) or Ctrl+P (Windows) → Destination: <strong>Save as PDF</strong> → Save. Links stay clickable!</div>
+
 ${coverHtml}
 ${dayCards}
 </body></html>`;
@@ -959,7 +1027,7 @@ function StoryView({ trip, ideas }) {
           <div style={styles.storyCoverTitle}>{trip.name}</div>
           <div style={styles.storyCoverDates}>{fmtDate(trip.start)} – {fmtDate(trip.end)}</div>
           <div style={styles.storyCoverMeta}>{totalDays} days · {ideas.filter(i=>i.date).length} activities</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 20 }}>
             {trip.travellers.map(t => (
               <span key={t} style={styles.storyCoverTraveller}>{t}</span>
             ))}
@@ -968,8 +1036,8 @@ function StoryView({ trip, ideas }) {
           <div style={styles.storyCoverLegend}>
             {CATEGORIES.filter(c => c.id !== "misc").map(c => (
               <div key={c.id} style={styles.storyCoverLegendItem}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 9, color: "#888" }}>{c.icon} {c.label}</span>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: c.color, flexShrink: 0, border: "1.5px solid rgba(255,255,255,0.3)" }} />
+                {c.icon} {c.label}
               </div>
             ))}
           </div>
@@ -1684,15 +1752,15 @@ const styles = {
 
   // Story — vertical per-day 9:16 cards
   storyOuter: { flex: 1, overflow: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 },
-  storyCoverCard: { width: "min(100%, 380px)", aspectRatio: "9/16", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 50%, #a8c4e0 100%)", border: "1px solid #a8c4e0", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(26,58,143,.3)", flexShrink: 0 },
-  storyCoverInner: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, textAlign: "center" },
+  storyCoverCard: { width: "min(100%, 380px)", aspectRatio: "9/16", background: "linear-gradient(160deg, #0f2470 0%, #1a3a8f 40%, #2a5298 100%)", border: "none", borderRadius: 24, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(10,20,80,.5)", flexShrink: 0 },
+  storyCoverInner: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "40px 28px 28px", textAlign: "center", gap: 0 },
   storyCoverEmoji: { fontSize: 48, marginBottom: 12, background: "#e8672a", borderRadius: 16, width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center" },
   storyCoverTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 26, color: "#f5e882", lineHeight: 1.4, marginBottom: 8 },
   storyCoverDates: { fontSize: 12, color: "#f5e882", marginBottom: 4, fontFamily: "'Space Mono',monospace" },
-  storyCoverMeta: { fontSize: 11, color: "#a8c4e0", fontFamily: "'Space Mono',monospace" },
-  storyCoverTraveller: { fontSize: 11, background: "rgba(245,232,130,.2)", color: "#f5e882", borderRadius: 20, padding: "4px 12px", border: "1px solid rgba(245,232,130,.4)", fontFamily: "'Space Mono',monospace" },
-  storyCoverLegend: { display: "flex", flexWrap: "wrap", gap: "6px 12px", justifyContent: "center", marginTop: 20, padding: "12px 8px", borderTop: "1px solid rgba(168,196,224,.3)" },
-  storyCoverLegendItem: { display: "flex", alignItems: "center", gap: 4, fontFamily: "'Space Mono',monospace" },
+  storyCoverMeta: { fontSize: 12, color: "#a8c4e0", fontFamily: "'Space Mono',monospace", marginTop: 4 },
+  storyCoverTraveller: { fontSize: 12, background: "rgba(255,255,255,0.15)", color: "#fff", borderRadius: 20, padding: "6px 14px", border: "1px solid rgba(255,255,255,0.3)", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, backdropFilter: "blur(4px)" },
+  storyCoverLegend: { display: "flex", flexWrap: "wrap", gap: "8px 14px", justifyContent: "center", marginTop: "auto", padding: "16px 8px", borderTop: "1px solid rgba(255,255,255,.15)" },
+  storyCoverLegendItem: { display: "flex", alignItems: "center", gap: 5, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 500 },
   storyDayCard: { width: "min(100%, 380px)", background: "#fff", border: "1px solid #a8c4e0", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 12px 32px rgba(26,58,143,.15)", flexShrink: 0 },
   storyDayCardHeader: { padding: "16px 20px 12px", background: "#1a3a8f", borderBottom: "1px solid #1230a0", display: "flex", alignItems: "baseline", justifyContent: "space-between" },
   storyDayNum: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 22, color: "#f5e882" },
