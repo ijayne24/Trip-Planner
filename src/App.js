@@ -7,13 +7,13 @@ const TRIPS_INDEX_KEY = "tripplanner-trips-index";
 
 const CATEGORIES = [
   { id: "flight",       label: "Flight",       icon: "🛫",  color: "#0369a1" },
-  { id: "transport",    label: "Transport",    icon: "🚖",  color: "#1a3a8f" },
-  { id: "food",         label: "Food & Drink", icon: "🍜",  color: "#e8672a" },
+  { id: "transport",    label: "Transport",    icon: "🚖",  color: "#1B2B4B" },
+  { id: "food",         label: "Food & Drink", icon: "🍜",  color: "#C85A2A" },
   { id: "activity",     label: "Activity",     icon: "🎯",  color: "#0ea5e9" },
-  { id: "accommodation",label: "Stay",         icon: "🏨",  color: "#6366f1" },
+  { id: "accommodation",label: "Stay",         icon: "🏨",  color: "#9B8EC4" },
   { id: "monument",     label: "Sights",       icon: "🏛️",  color: "#f59e0b" },
-  { id: "shopping",     label: "Shopping",     icon: "🛍️",  color: "#e8672a" },
-  { id: "misc",         label: "Other",        icon: "📍",  color: "#a8c4e0" },
+  { id: "shopping",     label: "Shopping",     icon: "🛍️",  color: "#C85A2A" },
+  { id: "misc",         label: "Other",        icon: "📍",  color: "#C9B8A8" },
 ];
 
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
@@ -49,6 +49,32 @@ function mkGhost(el) {
   return g;
 }
 
+// ─── Parse Google Maps URL to extract place name ─────────────────────────────
+function parseGoogleMapsUrl(url) {
+  try {
+    // Handle maps.google.com/maps/place/Place+Name/@lat,lng
+    const placeMatch = url.match(/\/place\/([^/@?]+)/);
+    if (placeMatch) {
+      return decodeURIComponent(placeMatch[1].replace(/\+/g, " ")).replace(/\//g, "").trim();
+    }
+    // Handle ?q=Place+Name
+    const qMatch = url.match(/[?&]q=([^&]+)/);
+    if (qMatch) {
+      return decodeURIComponent(qMatch[1].replace(/\+/g, " ")).trim();
+    }
+    // Handle search?query=Place+Name
+    const queryMatch = url.match(/query=([^&]+)/);
+    if (queryMatch) {
+      return decodeURIComponent(queryMatch[1].replace(/\+/g, " ")).trim();
+    }
+  } catch {}
+  return null;
+}
+
+function isUrl(str) {
+  return str.startsWith("http://") || str.startsWith("https://") || str.startsWith("maps.");
+}
+
 // ─── IdeaForm modal ───────────────────────────────────────────────────────────
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea || {
@@ -73,12 +99,36 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
         </div>
 
         <div style={styles.formGrid}>
-          {/* Title */}
+          {/* Title / URL smart input */}
           <div style={styles.formFull}>
             <label style={styles.label}>What is it? *</label>
-            <input style={styles.input} placeholder="e.g. Peking duck lunch at Sheng Yong Xing"
-              value={form.title} onChange={e => set("title", e.target.value)} autoFocus
+            <input style={styles.input}
+              placeholder="Name or paste a Google Maps / website link…"
+              value={form.title}
+              autoFocus
+              onChange={e => {
+                const val = e.target.value;
+                set("title", val);
+              }}
+              onPaste={e => {
+                const pasted = e.clipboardData.getData("text").trim();
+                if (isUrl(pasted)) {
+                  e.preventDefault();
+                  // It's a URL — put it in mapsUrl and try to extract a name
+                  const extracted = parseGoogleMapsUrl(pasted);
+                  setForm(f => ({
+                    ...f,
+                    mapsUrl: pasted,
+                    title: extracted || f.title,
+                  }));
+                }
+              }}
               onKeyDown={e => { if (e.key === "Enter" && form.title.trim()) onSave({ ...form, id: idea?.id || uid() }); }} />
+            {form.mapsUrl && form.title && (
+              <div style={{ fontSize: 11, color: "#10b981", marginTop: 4, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 4 }}>
+                ✓ Link saved · <a href={form.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#C85A2A" }}>preview</a>
+              </div>
+            )}
           </div>
 
           {/* Category */}
@@ -190,15 +240,15 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
           <div style={styles.formFull}>
             <label style={styles.label}>Split between</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-              {(travellers || []).length === 0 && <span style={{ fontSize: 12, color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Add travellers to your trip first</span>}
+              {(travellers || []).length === 0 && <span style={{ fontSize: 12, color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>Add travellers to your trip first</span>}
               {(travellers || []).map(t => {
                 const selected = form.splitBetween?.includes(t) ?? false;
                 return (
                   <button key={t} type="button"
-                    style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 500,
-                      background: selected ? "#1a3a8f" : "#f0f6ff",
-                      color: selected ? "#fff" : "#1a3a8f",
-                      borderColor: selected ? "#1a3a8f" : "#a8c4e0" }}
+                    style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, cursor: "pointer", fontFamily: "'Inter',sans-serif", fontWeight: 500,
+                      background: selected ? "#1B2B4B" : "#FAF7F2",
+                      color: selected ? "#fff" : "#1B2B4B",
+                      borderColor: selected ? "#1B2B4B" : "#C9B8A8" }}
                     onClick={() => {
                       const current = form.splitBetween || [];
                       set("splitBetween", selected ? current.filter(x => x !== t) : [...current, t]);
@@ -209,14 +259,14 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
               })}
               {(travellers || []).length > 0 && (
                 <button type="button"
-                  style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid #a8c4e0", fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", color: "#4a6fa5", background: "#f0f6ff" }}
+                  style={{ padding: "6px 12px", borderRadius: 20, border: "1.5px solid #C9B8A8", fontSize: 12, cursor: "pointer", fontFamily: "'Inter',sans-serif", color: "#6B7A90", background: "#FAF7F2" }}
                   onClick={() => set("splitBetween", form.splitBetween?.length === travellers.length ? [] : [...travellers])}>
                   {form.splitBetween?.length === travellers.length ? "Deselect all" : "Select all"}
                 </button>
               )}
             </div>
             {form.cost && form.splitBetween?.length > 0 && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>
                 = {form.currency} {(parseFloat(form.cost) / form.splitBetween.length).toFixed(2)} per person ({form.splitBetween.length} pax)
               </div>
             )}
@@ -238,8 +288,17 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
           </div>
           <div style={styles.formFull}>
             <label style={styles.label}>Google Maps / Booking URL</label>
-            <input style={styles.input} placeholder="https://maps.google.com/..."
-              value={form.mapsUrl} onChange={e => set("mapsUrl", e.target.value)} />
+            <input style={{ ...styles.input, ...(form.mapsUrl ? { borderColor: "#10b981" } : {}) }}
+              placeholder="https://maps.google.com/…  (or paste above)"
+              value={form.mapsUrl}
+              onChange={e => set("mapsUrl", e.target.value)}
+              onPaste={e => {
+                const pasted = e.clipboardData.getData("text").trim();
+                if (isUrl(pasted) && !form.title) {
+                  const extracted = parseGoogleMapsUrl(pasted);
+                  if (extracted) setForm(f => ({ ...f, title: extracted }));
+                }
+              }} />
           </div>
 
           {/* Notes */}
@@ -287,14 +346,14 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
             <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
               {idea.time && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ ...styles.tag, background: "#deeaf7", color: "#0369a1", fontWeight: 600 }}>
+                  <span style={{ ...styles.tag, background: "#FAF7F2", color: "#0369a1", fontWeight: 600 }}>
                     🛫 Departs {idea.time}{idea.departTerminal ? ` · ${idea.departTerminal}` : ""}{idea.flightNum ? ` · ${idea.flightNum}` : ""}
                   </span>
                 </div>
               )}
               {(idea.arrivalTime || idea.arrivalAirport) && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ ...styles.tag, background: "#deeaf7", color: "#0369a1", fontWeight: 600 }}>
+                  <span style={{ ...styles.tag, background: "#FAF7F2", color: "#0369a1", fontWeight: 600 }}>
                     🛬 Arrives {idea.arrivalTime ? `${idea.arrivalTime} · ` : ""}{idea.arrivalAirport || ""}
                   </span>
                 </div>
@@ -340,14 +399,14 @@ function TripDashboard({ onSelect, onNew }) {
         {/* Decorative SVG shapes */}
         <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 390 320" preserveAspectRatio="xMidYMid slice">
           {/* Sun */}
-          <circle cx="320" cy="60" r="55" fill="#f5e882" opacity="0.9"/>
+          <circle cx="320" cy="60" r="55" fill="#F5E882" opacity="0.9"/>
           {/* Cloud shapes */}
           <ellipse cx="60" cy="40" rx="45" ry="28" fill="white" opacity="0.15"/>
           <ellipse cx="95" cy="30" rx="35" ry="22" fill="white" opacity="0.15"/>
           {/* Wave 1 */}
-          <path d="M0 200 Q60 170 120 200 Q180 230 240 200 Q300 170 360 200 Q390 215 390 215 L390 320 L0 320 Z" fill="#e8672a" opacity="0.85"/>
+          <path d="M0 200 Q60 170 120 200 Q180 230 240 200 Q300 170 360 200 Q390 215 390 215 L390 320 L0 320 Z" fill="#C85A2A" opacity="0.85"/>
           {/* Wave 2 */}
-          <path d="M0 230 Q80 205 160 230 Q240 255 320 230 Q360 218 390 228 L390 320 L0 320 Z" fill="#c8dff5" opacity="0.6"/>
+          <path d="M0 230 Q80 205 160 230 Q240 255 320 230 Q360 218 390 228 L390 320 L0 320 Z" fill="#F0EBE3" opacity="0.6"/>
           {/* Wave 3 */}
           <path d="M0 260 Q100 240 200 260 Q300 280 390 255 L390 320 L0 320 Z" fill="#fff" opacity="0.9"/>
           {/* Airplane */}
@@ -368,8 +427,8 @@ function TripDashboard({ onSelect, onNew }) {
         {trips.length === 0 ? (
           <div style={dashStyles.empty}>
             <div style={{ fontSize: 52, marginBottom: 12 }}>{"🗺️"}</div>
-            <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 22, color: "#1a3a8f", marginBottom: 8 }}>No trips yet!</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: "#4a6fa5" }}>Tap below to plan your first adventure</div>
+            <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 22, color: "#1B2B4B", marginBottom: 8 }}>No trips yet!</div>
+            <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, color: "#6B7A90" }}>Tap below to plan your first adventure</div>
           </div>
         ) : (
           trips.map(trip => (
@@ -383,7 +442,7 @@ function TripDashboard({ onSelect, onNew }) {
                   <span style={dashStyles.tripStat}>{"📍"} {trip.ideaCount || 0} stops</span>
                 </div>
               </div>
-              <div style={{ fontSize: 22, color: "#a8c4e0", fontWeight: 300 }}>›</div>
+              <div style={{ fontSize: 22, color: "#C9B8A8", fontWeight: 300 }}>›</div>
             </div>
           ))
         )}
@@ -397,22 +456,22 @@ function TripDashboard({ onSelect, onNew }) {
 }
 
 const dashStyles = {
-  screen: { minHeight: "100dvh", background: "#f0f6ff", display: "flex", flexDirection: "column" },
-  hero: { position: "relative", background: "#1a3a8f", height: 300, overflow: "hidden", flexShrink: 0 },
+  screen: { minHeight: "100dvh", background: "#FAF7F2", display: "flex", flexDirection: "column" },
+  hero: { position: "relative", background: "#1B2B4B", height: 300, overflow: "hidden", flexShrink: 0 },
   heroContent: { position: "relative", zIndex: 2, padding: "56px 28px 0", textAlign: "left" },
-  heroTitle: { fontFamily: "'Pacifico',cursive", fontSize: 36, color: "#f5e882", lineHeight: 1.2 },
-  heroSub: { fontFamily: "'DM Sans',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.8)", marginTop: 6 },
+  heroTitle: { fontFamily: "'Pacifico',cursive", fontSize: 36, color: "#F5E882", lineHeight: 1.2 },
+  heroSub: { fontFamily: "'Inter',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.8)", marginTop: 6 },
   body: { flex: 1, padding: "20px 16px 8px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" },
   empty: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px", textAlign: "center" },
-  tripCard: { background: "#fff", borderRadius: 20, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 2px 16px rgba(26,58,143,0.08)", borderLeft: "4px solid #e8672a" },
-  tripIcon: { width: 52, height: 52, background: "#deeaf7", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 },
+  tripCard: { background: "#fff", borderRadius: 20, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 2px 16px rgba(26,58,143,0.08)", borderLeft: "4px solid #C85A2A" },
+  tripIcon: { width: 52, height: 52, background: "#FAF7F2", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 },
   tripCardBody: { flex: 1, minWidth: 0 },
-  tripName: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1a3a8f", marginBottom: 3 },
-  tripMeta: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#4a6fa5", marginBottom: 6 },
+  tripName: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1B2B4B", marginBottom: 3 },
+  tripMeta: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#6B7A90", marginBottom: 6 },
   tripStats: { display: "flex", gap: 12 },
-  tripStat: { fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: "#a8c4e0", background: "#f0f6ff", padding: "2px 8px", borderRadius: 10 },
+  tripStat: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#C9B8A8", background: "#FAF7F2", padding: "2px 8px", borderRadius: 10 },
   footer: { padding: "16px", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" },
-  newBtn: { width: "100%", padding: "18px", background: "#e8672a", color: "#fff", border: "none", borderRadius: 18, fontFamily: "'DM Sans',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(232,103,42,0.3)" },
+  newBtn: { width: "100%", padding: "18px", background: "#C85A2A", color: "#fff", border: "none", borderRadius: 18, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(232,103,42,0.3)" },
 };
 
 // ─── TripSetup screen ─────────────────────────────────────────────────────────
@@ -429,8 +488,8 @@ function TripSetup({ onDone, savedTrip, onResume }) {
       <div style={{ width: "100%", maxWidth: 480 }}>
         <div style={styles.setupCard}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 30, color: "#1a3a8f", marginBottom: 4 }}>Trip Planner {"✈️"}</div>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 13, color: "#4a6fa5" }}>Plan. Share. Explore.</div>
+          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 30, color: "#1B2B4B", marginBottom: 4 }}>Trip Planner {"✈️"}</div>
+          <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: "#6B7A90" }}>Plan. Share. Explore.</div>
         </div>
         {savedTrip && (
           <div style={{ background: "#1a1500", border: "1px solid #f59e0b44", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
@@ -481,7 +540,7 @@ function TripSetup({ onDone, savedTrip, onResume }) {
                 }
               }}>Add</button>
             </div>
-            <p style={{ fontSize: 10, color: "#4a6fa5", marginTop: 4, fontFamily: "'Space Mono',monospace" }}>Separate multiple names with commas</p>
+            <p style={{ fontSize: 10, color: "#6B7A90", marginTop: 4, fontFamily: "'Inter',sans-serif" }}>Separate multiple names with commas</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
               {travellers.map(t => (
                 <span key={t} style={styles.travChip}>{t}
@@ -562,9 +621,9 @@ function BudgetSheet({ ideas, travellers, currency }) {
                       </span>
                     </td>
                     <td style={{ ...styles.td, textAlign: "right" }}>
-                      <div style={{ color: "#e8672a", fontWeight: 600 }}>{fmtCurrency(parseFloat(item.cost), item.currency)}</div>
+                      <div style={{ color: "#C85A2A", fontWeight: 600 }}>{fmtCurrency(parseFloat(item.cost), item.currency)}</div>
                       {item.splitBetween?.length > 0 && (
-                        <div style={{ fontSize: 10, color: "#4a6fa5", marginTop: 2 }}>
+                        <div style={{ fontSize: 10, color: "#6B7A90", marginTop: 2 }}>
                           ÷{item.splitBetween.length} = {fmtCurrency(parseFloat(item.cost) / item.splitBetween.length, item.currency)}/pax
                         </div>
                       )}
@@ -688,13 +747,13 @@ function exportStoryHTML(trip, ideas) {
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:#eaf3fc;color:#1a3a8f;padding:0 0 32px;}
+body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0 32px;}
 
 /* Cover */
-.cover-card{width:100%;background:linear-gradient(160deg,#0f2470 0%,#1a3a8f 40%,#2a5298 100%);overflow:hidden;margin-bottom:12px;}
+.cover-card{width:100%;background:linear-gradient(160deg,#111D33 0%,#1B2B4B 40%,#233260 100%);overflow:hidden;margin-bottom:12px;}
 .cover-inner{padding:52px 24px 44px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;}
-.cover-plane{width:72px;height:72px;background:#e8672a;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:4px;}
-.cover-title{font-family:'Pacifico',cursive;font-size:32px;color:#f5e882;line-height:1.3;}
+.cover-plane{width:72px;height:72px;background:#C85A2A;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:4px;}
+.cover-title{font-family:'Pacifico',cursive;font-size:32px;color:#F5E882;line-height:1.3;}
 .cover-dates{font-size:15px;color:rgba(255,255,255,0.8);font-weight:500;}
 .cover-meta{font-size:13px;color:rgba(255,255,255,0.5);}
 .cover-travellers{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px;}
@@ -704,28 +763,28 @@ body{font-family:'DM Sans',sans-serif;background:#eaf3fc;color:#1a3a8f;padding:0
 
 /* Day cards — match app style */
 .day-card{background:#fff;border-radius:20px;overflow:hidden;margin:0 12px 12px;box-shadow:0 2px 16px rgba(26,58,143,0.08);}
-.day-header{padding:16px 20px 12px;background:#1a3a8f;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;}
-.day-num{font-family:'Pacifico',cursive;font-size:24px;color:#f5e882;margin-right:8px;}
-.day-date{font-size:13px;color:#a8c4e0;}
+.day-header{padding:16px 20px 12px;background:#1B2B4B;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;}
+.day-num{font-family:'Pacifico',cursive;font-size:24px;color:#F5E882;margin-right:8px;}
+.day-date{font-size:13px;color:#C9B8A8;}
 .day-trip{font-size:11px;color:rgba(168,196,224,0.7);}
-.stay-banner{display:flex;align-items:center;gap:12px;background:#f0f6ff;border-bottom:1px solid #a8c4e0;padding:14px 20px;}
-.stay-name{font-size:14px;color:#1a3a8f;font-weight:600;}
-.stay-place{font-size:12px;color:#4a6fa5;margin-top:2px;}
+.stay-banner{display:flex;align-items:center;gap:12px;background:#FAF7F2;border-bottom:1px solid #C9B8A8;padding:14px 20px;}
+.stay-name{font-size:14px;color:#1B2B4B;font-weight:600;}
+.stay-place{font-size:12px;color:#6B7A90;margin-top:2px;}
 .stops{padding:16px 20px;display:flex;flex-direction:column;}
 .stop-row{display:flex;gap:14px;}
 .stop-spine{display:flex;flex-direction:column;align-items:center;width:32px;flex-shrink:0;}
 .stop-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;z-index:1;}
-.stop-line{width:2px;flex:1;background:#deeaf7;min-height:16px;margin-top:3px;}
+.stop-line{width:2px;flex:1;background:#FAF7F2;min-height:16px;margin-top:3px;}
 .stop-body{flex:1;}
 .stop-body-mb{padding-bottom:16px;}
-.stop-title{font-size:15px;color:#1a3a8f;font-weight:600;line-height:1.4;}
-.stop-place{font-size:13px;color:#4a6fa5;margin-top:4px;}
+.stop-title{font-size:15px;color:#1B2B4B;font-weight:600;line-height:1.4;}
+.stop-place{font-size:13px;color:#6B7A90;margin-top:4px;}
 .stop-notes{font-size:13px;color:#78909c;margin-top:4px;font-style:italic;line-height:1.5;}
 .stop-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
-.chip{font-size:13px;background:#f0f6ff;color:#1a3a8f;border-radius:8px;padding:4px 10px;border:1px solid #deeaf7;}
-.chip-cost{color:#e8672a;background:#fff5f0;border-color:#ffd0b5;}
-.map-btn{font-size:13px;background:#e8672a;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;}
-.day-footer{padding:12px 20px;border-top:1px solid #f0f6ff;display:flex;justify-content:space-between;background:#fafcff;font-size:12px;color:#a8c4e0;}
+.chip{font-size:13px;background:#FAF7F2;color:#1B2B4B;border-radius:8px;padding:4px 10px;border:1px solid #FAF7F2;}
+.chip-cost{color:#C85A2A;background:#fff5f0;border-color:#ffd0b5;}
+.map-btn{font-size:13px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;}
+.day-footer{padding:12px 20px;border-top:1px solid #FAF7F2;display:flex;justify-content:space-between;background:#fafcff;font-size:12px;color:#C9B8A8;}
 </style></head>
 <body>
 
@@ -772,7 +831,7 @@ function MapView({ trip, ideas }) {
   if (days.length === 0) {
     return (
       <div style={styles.storyOuter}>
-        <div style={{ color: "#4a6fa5", textAlign: "center", padding: "80px 0", fontSize: 14, fontFamily: "'DM Sans',sans-serif" }}>
+        <div style={{ color: "#6B7A90", textAlign: "center", padding: "80px 0", fontSize: 14, fontFamily: "'Inter',sans-serif" }}>
           Schedule some ideas to see your journey map
         </div>
       </div>
@@ -781,7 +840,7 @@ function MapView({ trip, ideas }) {
 
   // Terrain textures per day index (cycles)
   const terrains = [
-    { bg: "linear-gradient(180deg,#deeaf7 0%,#c8e6f0 60%,#a8d4e8 100%)", road: "#fff", label: "coastal" },
+    { bg: "linear-gradient(180deg,#FAF7F2 0%,#c8e6f0 60%,#a8d4e8 100%)", road: "#fff", label: "coastal" },
     { bg: "linear-gradient(180deg,#e8f5e9 0%,#c8e6c9 60%,#a5d6a7 100%)", road: "#fff", label: "forest" },
     { bg: "linear-gradient(180deg,#fff8e1 0%,#ffecb3 60%,#ffe082 100%)", road: "#fff", label: "desert" },
     { bg: "linear-gradient(180deg,#fce4ec 0%,#f8bbd0 60%,#f48fb1 100%)", road: "#fff", label: "city" },
@@ -791,7 +850,7 @@ function MapView({ trip, ideas }) {
   return (
     <div style={styles.storyOuter}>
       {/* Cover map card */}
-      <div style={{ ...styles.mapCard, background: "linear-gradient(160deg,#1a3a8f 0%,#2a5298 50%,#a8c4e0 100%)" }}>
+      <div style={{ ...styles.mapCard, background: "linear-gradient(160deg,#1B2B4B 0%,#233260 50%,#C9B8A8 100%)" }}>
         <div style={styles.mapCoverInner}>
           <div style={{ fontSize: 52, marginBottom: 8 }}>🗺️</div>
           <div style={styles.mapCoverTitle}>{trip.name}</div>
@@ -808,7 +867,7 @@ function MapView({ trip, ideas }) {
           </div>
           {/* Dotted flight path decoration */}
           <svg width="260" height="40" style={{ marginTop: 16, opacity: 0.4 }}>
-            <path d="M 10 20 Q 65 5 130 20 Q 195 35 250 20" stroke="#f5e882" strokeWidth="2" strokeDasharray="5,5" fill="none"/>
+            <path d="M 10 20 Q 65 5 130 20 Q 195 35 250 20" stroke="#F5E882" strokeWidth="2" strokeDasharray="5,5" fill="none"/>
             <text x="10" y="24" fontSize="16">🛫</text>
             <text x="230" y="24" fontSize="16">🛬</text>
           </svg>
@@ -912,7 +971,7 @@ function MapView({ trip, ideas }) {
                         background: cat.color, color: "#fff",
                         fontSize: 9, fontWeight: 700,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontFamily: "'Space Mono',monospace",
+                        fontFamily: "'Inter',sans-serif",
                         boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
                       }}>{i + 1}</div>
                     </div>
@@ -922,8 +981,8 @@ function MapView({ trip, ideas }) {
                       borderRadius: 20,
                       padding: "2px 8px",
                       fontSize: 9,
-                      color: "#1a3a8f",
-                      fontFamily: "'DM Sans',sans-serif",
+                      color: "#1B2B4B",
+                      fontFamily: "'Inter',sans-serif",
                       fontWeight: 600,
                       textAlign: "center",
                       maxWidth: 110,
@@ -938,15 +997,15 @@ function MapView({ trip, ideas }) {
                     {/* Time if present */}
                     {item.time && !item._isStay && (
                       <div style={{
-                        fontSize: 8, color: "#4a6fa5",
-                        fontFamily: "'Space Mono',monospace",
+                        fontSize: 8, color: "#6B7A90",
+                        fontFamily: "'Inter',sans-serif",
                         marginTop: 2,
                       }}>{item.time}</div>
                     )}
                     {/* Map link */}
                     {item.mapsUrl && (
                       <a href={item.mapsUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 8, color: "#e8672a", marginTop: 1, textDecoration: "none", fontFamily: "'Space Mono',monospace" }}
+                        style={{ fontSize: 8, color: "#C85A2A", marginTop: 1, textDecoration: "none", fontFamily: "'Inter',sans-serif" }}
                         onClick={e => e.stopPropagation()}>
                         🗺 map
                       </a>
@@ -957,7 +1016,7 @@ function MapView({ trip, ideas }) {
 
               {/* Empty state */}
               {allStops.length === 0 && (
-                <div style={{ textAlign: "center", padding: "40px 20px", color: "#4a6fa5", fontSize: 12, fontFamily: "'DM Sans',sans-serif" }}>
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#6B7A90", fontSize: 12, fontFamily: "'Inter',sans-serif" }}>
                   No stops yet for this day
                 </div>
               )}
@@ -1066,7 +1125,7 @@ function StoryView({ trip, ideas }) {
               <div key={stay.id} style={styles.storyDayStayBanner}>
                 <span style={{ fontSize: 14 }}>🏨</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: "#1a3a8f", fontWeight: 600, fontFamily: "'DM Sans',sans-serif" }}>{stay.title}</div>
+                  <div style={{ fontSize: 11, color: "#1B2B4B", fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>{stay.title}</div>
                   {stay.place && <div style={{ fontSize: 10, color: "#7c6fbb" }}>{stay.place}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
@@ -1097,13 +1156,13 @@ function StoryView({ trip, ideas }) {
                     <div style={{ flex: 1, paddingBottom: isLast ? 0 : 12 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: "#1a3a8f", fontWeight: 500, lineHeight: 1.3, fontFamily: "'DM Sans',sans-serif" }}>
+                          <div style={{ fontSize: 13, color: "#1B2B4B", fontWeight: 500, lineHeight: 1.3, fontFamily: "'Inter',sans-serif" }}>
                             {cat.icon} {item.title}
                             {item.bookedStatus === "booked" && <span style={{ color: "#10b981", marginLeft: 6 }}>✅</span>}
                             {item.bookedStatus === "need-to-book" && <span style={{ color: "#f59e0b", marginLeft: 6, fontSize: 11 }}>📋</span>}
                           </div>
-                          {item.place && <div style={{ fontSize: 11, color: "#4a6fa5", marginTop: 2, fontFamily: "'DM Sans',sans-serif" }}>📍 {item.place}</div>}
-                          {item.notes && <div style={{ fontSize: 11, color: "#4a6fa5", marginTop: 2, fontStyle: "italic", lineHeight: 1.4, fontFamily: "'DM Sans',sans-serif" }}>{item.notes}</div>}
+                          {item.place && <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontFamily: "'Inter',sans-serif" }}>📍 {item.place}</div>}
+                          {item.notes && <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontStyle: "italic", lineHeight: 1.4, fontFamily: "'Inter',sans-serif" }}>{item.notes}</div>}
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                             {item.time && <span style={styles.storyChip}>{item.time}</span>}
                             {item.cost && <span style={{ ...styles.storyChip, color: "#f59e0b" }}>💰 {item.cost} {item.currency}</span>}
@@ -1341,7 +1400,7 @@ export default function TripPlanner() {
   }, []);
   const isMobile = windowWidth < 1024;
 
-  if (!loaded) return <div style={{ background: "#deeaf7", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
+  if (!loaded) return <div style={{ background: "#FAF7F2", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>Loading…</div>;
 
   if (screen === "dashboard") return (
     <TripDashboard
@@ -1383,11 +1442,11 @@ export default function TripPlanner() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@300;400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;overflow:hidden;background:#deeaf7;font-family:'DM Sans',sans-serif;color:#1a3a8f;-webkit-font-smoothing:antialiased;}
-        ::-webkit-scrollbar{width:3px;height:3px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#a8c4e0;border-radius:4px;}
-        input,select,textarea{color-scheme:light;font-family:'DM Sans',sans-serif;}
+        html,body{height:100%;overflow:hidden;background:#FAF7F2;font-family:'Inter',sans-serif;color:#1B2B4B;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+        ::-webkit-scrollbar{width:3px;height:3px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#C9B8A8;border-radius:4px;}
+        input,select,textarea{color-scheme:light;font-family:'Inter',sans-serif;}
         a{color:inherit;}
         button{-webkit-tap-highlight-color:transparent;}
         /* Sidebar/panel — toggled by bottom nav on mobile */
@@ -1472,7 +1531,7 @@ export default function TripPlanner() {
                   {(trip.travellers || []).map(t => (
                     <span key={t} style={styles.travChip}>{t}
                       <button onClick={() => setTrip(tr => ({ ...tr, travellers: tr.travellers.filter(x => x !== t) }))}
-                        style={{ background: "none", border: "none", color: "#e8672a", cursor: "pointer", marginLeft: 4 }}>✕</button>
+                        style={{ background: "none", border: "none", color: "#C85A2A", cursor: "pointer", marginLeft: 4 }}>✕</button>
                     </span>
                   ))}
                 </div>
@@ -1519,7 +1578,7 @@ export default function TripPlanner() {
               <span>{icon}</span><span>{label}</span>
             </button>
           ))}
-          <button style={{ ...styles.tabRowBtn, fontSize: 11, color: "#a8c4e0" }} onClick={() => setScreen("dashboard")}>🏠 Home</button>
+          <button style={{ ...styles.tabRowBtn, fontSize: 11, color: "#C9B8A8" }} onClick={() => setScreen("dashboard")}>🏠 Home</button>
         </div>
 
         {/* Main content area */}
@@ -1582,8 +1641,8 @@ export default function TripPlanner() {
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: 20 }}>🏨</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1a3a8f", fontFamily: "'DM Sans',sans-serif" }}>{stay.title}</div>
-                          <div style={{ fontSize: 11, color: "#4a6fa5", marginTop: 2, fontFamily: "'DM Sans',sans-serif" }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1B2B4B", fontFamily: "'Inter',sans-serif" }}>{stay.title}</div>
+                          <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontFamily: "'Inter',sans-serif" }}>
                             {fmtDate(stay.date)}{stay.checkOut && stay.checkOut !== stay.date ? ` → ${fmtDate(stay.checkOut)}` : ""}
                             {stay.place ? ` · ${stay.place}` : ""}
                           </div>
@@ -1625,15 +1684,15 @@ export default function TripPlanner() {
         {tab === "budget" && <BudgetSheet ideas={ideas} travellers={trip.travellers} currency={trip.currency} />}
         {tab === "story" && (
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-            <div style={{ padding: "10px 16px", borderBottom: "1px solid #a8c4e0", background: "#c8dff5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, gap: 10, flexWrap: "wrap" }}>
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid #C9B8A8", background: "#F0EBE3", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, gap: 10, flexWrap: "wrap" }}>
               {/* View toggle */}
-              <div style={{ display: "flex", background: "#a8c4e0", borderRadius: 8, padding: 3, gap: 2 }}>
+              <div style={{ display: "flex", background: "#C9B8A8", borderRadius: 8, padding: 3, gap: 2 }}>
                 <button onClick={() => setStoryMode("cards")}
-                  style={{ padding: "5px 12px", borderRadius: 6, border: "none", fontFamily: "'Space Mono',monospace", fontSize: 11, cursor: "pointer", background: storyMode === "cards" ? "#fff" : "transparent", color: storyMode === "cards" ? "#1a3a8f" : "#4a6fa5", fontWeight: storyMode === "cards" ? 700 : 400, transition: "all .2s" }}>
+                  style={{ padding: "5px 12px", borderRadius: 6, border: "none", fontFamily: "'Inter',sans-serif", fontSize: 11, cursor: "pointer", background: storyMode === "cards" ? "#fff" : "transparent", color: storyMode === "cards" ? "#1B2B4B" : "#6B7A90", fontWeight: storyMode === "cards" ? 700 : 400, transition: "all .2s" }}>
                   📋 Cards
                 </button>
                 <button onClick={() => setStoryMode("map")}
-                  style={{ padding: "5px 12px", borderRadius: 6, border: "none", fontFamily: "'Space Mono',monospace", fontSize: 11, cursor: "pointer", background: storyMode === "map" ? "#fff" : "transparent", color: storyMode === "map" ? "#1a3a8f" : "#4a6fa5", fontWeight: storyMode === "map" ? 700 : 400, transition: "all .2s" }}>
+                  style={{ padding: "5px 12px", borderRadius: 6, border: "none", fontFamily: "'Inter',sans-serif", fontSize: 11, cursor: "pointer", background: storyMode === "map" ? "#fff" : "transparent", color: storyMode === "map" ? "#1B2B4B" : "#6B7A90", fontWeight: storyMode === "map" ? 700 : 400, transition: "all .2s" }}>
                   🗺 Journey Map
                 </button>
               </div>
@@ -1678,132 +1737,132 @@ export default function TripPlanner() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = {
-  app: { height: "100dvh", display: "flex", flexDirection: "column", background: "#deeaf7", overflow: "hidden" },
-  topbar: { background: "#1a3a8f", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
-  tabRowBar: { background: "#0f2470", display: "flex", borderBottom: "1px solid #1230a0", flexShrink: 0 },
-  tabRowBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#a8c4e0", fontSize: 11, fontFamily: "'Space Mono',monospace", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "all .2s", borderBottom: "2px solid transparent" },
-  tabRowBtnActive: { color: "#f5e882", borderBottomColor: "#e8672a" },
+  app: { height: "100dvh", display: "flex", flexDirection: "column", background: "#FAF7F2", overflow: "hidden" },
+  topbar: { background: "#1B2B4B", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
+  tabRowBar: { background: "#111D33", display: "flex", borderBottom: "1px solid #233260", flexShrink: 0 },
+  tabRowBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#C9B8A8", fontSize: 11, fontFamily: "'Inter',sans-serif", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "all .2s", borderBottom: "2px solid transparent" },
+  tabRowBtnActive: { color: "#F5E882", borderBottomColor: "#C85A2A" },
   iconAction: { background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", transition: "background .2s" },
-  logo: { fontSize: 24, background: "#e8672a", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  tripName: { fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 15, color: "#f5e882" },
-  tripMeta: { fontSize: 10, color: "#a8c4e0", marginTop: 1, fontFamily: "'DM Sans',sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  tabBar: { display: "flex", background: "#0f2470", borderRadius: 10, padding: 3, gap: 2 },
-  tabBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: "#a8c4e0", fontSize: 10, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap" },
-  tabBtnActive: { background: "#e8672a", color: "#fff", fontWeight: 700 },
-  btnPrimary: { background: "#e8672a", color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" },
-  btnSecondary: { background: "#deeaf7", color: "#1a3a8f", border: "1px solid #a8c4e0", borderRadius: 12, padding: "12px 18px", fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap" },
+  logo: { fontSize: 24, background: "#C85A2A", borderRadius: 8, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  tripName: { fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 15, color: "#F5E882" },
+  tripMeta: { fontSize: 10, color: "#C9B8A8", marginTop: 1, fontFamily: "'Inter',sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  tabBar: { display: "flex", background: "#111D33", borderRadius: 10, padding: 3, gap: 2 },
+  tabBtn: { padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: "#C9B8A8", fontSize: 10, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap" },
+  tabBtnActive: { background: "#C85A2A", color: "#fff", fontWeight: 700 },
+  btnPrimary: { background: "#C85A2A", color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap" },
+  btnSecondary: { background: "#FAF7F2", color: "#1B2B4B", border: "1px solid #C9B8A8", borderRadius: 12, padding: "12px 18px", fontSize: 13, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap" },
 
   planLayout: { flex: 1, display: "flex", overflow: "hidden" },
-  poolPanel: { width: "min(320px, 100%)", flexShrink: 0, background: "#c8dff5", borderRight: "1px solid #a8c4e0", display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s" },
+  poolPanel: { width: "min(320px, 100%)", flexShrink: 0, background: "#F0EBE3", borderRight: "1px solid #C9B8A8", display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s" },
   schedulePanel: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
   panelHead: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
-  panelTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 16, color: "#1a3a8f" },
-  panelHint: { fontSize: 10, color: "#4a6fa5", marginBottom: 12, lineHeight: 1.5, fontFamily: "'Space Mono',monospace" },
-  countBadge: { background: "#1a3a8f", color: "#f5e882", borderRadius: 20, padding: "1px 8px", fontSize: 11 },
-  emptyState: { textAlign: "center", color: "#4a6fa5", padding: "40px 0", fontSize: 12, fontFamily: "'Space Mono',monospace" },
+  panelTitle: { fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 14, color: "#1B2B4B", letterSpacing: "-0.3px" },
+  panelHint: { fontSize: 11, color: "#6B7A90", marginBottom: 12, lineHeight: 1.6, fontFamily: "'Inter',sans-serif" },
+  countBadge: { background: "#1B2B4B", color: "#F5E882", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 },
+  emptyState: { textAlign: "center", color: "#6B7A90", padding: "40px 0", fontSize: 13, fontFamily: "'Inter',sans-serif" },
 
-  dayTabs: { display: "flex", borderBottom: "1px solid #a8c4e0", background: "#c8dff5", overflowX: "auto", flexShrink: 0, scrollbarWidth: "none" },
-  dayTab: { padding: "10px 14px", border: "none", background: "none", color: "#4a6fa5", fontSize: 10, cursor: "pointer", whiteSpace: "nowrap", borderBottom: "2px solid transparent", fontFamily: "'Space Mono',monospace", display: "flex", alignItems: "center", gap: 6, transition: "all .2s" },
-  dayTabActive: { color: "#1a3a8f", borderBottomColor: "#e8672a" },
-  dayCount: { background: "#e8672a22", color: "#e8672a", borderRadius: 10, padding: "1px 6px", fontSize: 10 },
-  dayContent: { flex: 1, display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s", borderRadius: 0, outline: "2px solid transparent", background: "#eaf3fc" },
-  dayTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 20, color: "#1a3a8f" },
+  dayTabs: { display: "flex", borderBottom: "1px solid #C9B8A8", background: "#F0EBE3", overflowX: "auto", flexShrink: 0, scrollbarWidth: "none" },
+  dayTab: { padding: "11px 16px", border: "none", background: "none", color: "#6B7A90", fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", borderBottom: "2px solid transparent", fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 6, transition: "all .2s" },
+  dayTabActive: { color: "#1B2B4B", borderBottomColor: "#C85A2A", fontWeight: 700 },
+  dayCount: { background: "#C85A2A22", color: "#C85A2A", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 600 },
+  dayContent: { flex: 1, display: "flex", flexDirection: "column", padding: 16, overflow: "hidden", transition: "all .2s", borderRadius: 0, outline: "2px solid transparent", background: "#FAF7F2" },
+  dayTitle: { fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 22, color: "#1B2B4B", letterSpacing: "-0.5px" },
 
   tlLine: { display: "flex", flexDirection: "column", alignItems: "center", width: 20, flexShrink: 0 },
-  tlDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0, marginTop: 16, border: "2px solid #0e0e0e" },
-  tlConnector: { width: 2, flex: 1, background: "#a8c4e0", minHeight: 12 },
+  tlDot: { width: 10, height: 10, borderRadius: "50%", flexShrink: 0, marginTop: 16, border: "2px solid #FAF7F2" },
+  tlConnector: { width: 2, flex: 1, background: "#C9B8A8", minHeight: 12 },
 
-  dropHint: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#4a6fa5", fontSize: 12, textAlign: "center", border: "2px dashed #a8c4e0", borderRadius: 12, margin: 8, padding: 32, fontFamily: "'Space Mono',monospace" },
+  dropHint: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontSize: 13, textAlign: "center", border: "2px dashed #C9B8A8", borderRadius: 16, margin: 8, padding: 32, fontFamily: "'Inter',sans-serif" },
 
-  ideaCard: { background: "#fff", border: "1px solid #deeaf7", borderLeft: "3px solid #555", borderRadius: 14, padding: "12px 14px", cursor: "grab", touchAction: "none", userSelect: "none", transition: "all .2s", boxShadow: "0 1px 4px rgba(26,58,143,0.06)" },
-  ideaTitle: { fontSize: 13, color: "#1a3a8f", fontWeight: 500, lineHeight: 1.4, fontFamily: "'DM Sans',sans-serif" },
-  ideaMeta: { fontSize: 11, color: "#4a6fa5", marginTop: 3, lineHeight: 1.4, fontFamily: "'DM Sans',sans-serif" },
-  tag: { fontSize: 10, background: "#deeaf7", color: "#1a3a8f", borderRadius: 6, padding: "2px 6px" },
-  mapsTag: { fontSize: 10, background: "#e8672a22", color: "#e8672a", borderRadius: 6, padding: "2px 6px", textDecoration: "none" },
-  mapsBtn: { background: "#fff", color: "#e8672a", border: "1px solid #e8672a", borderRadius: 8, padding: "6px 12px", fontSize: 10, textDecoration: "none", whiteSpace: "nowrap", fontFamily: "'Space Mono',monospace" },
-  bookedBadge: { fontSize: 10, background: "#10b98122", color: "#10b981", borderRadius: 6, padding: "1px 6px" },
+  ideaCard: { background: "#fff", border: "1px solid #EDE8E1", borderLeft: "3px solid #555", borderRadius: 16, padding: "14px 16px", cursor: "grab", touchAction: "none", userSelect: "none", transition: "all .2s", boxShadow: "0 1px 6px rgba(27,43,75,0.06)" },
+  ideaTitle: { fontSize: 14, color: "#1B2B4B", fontWeight: 600, lineHeight: 1.4, fontFamily: "'Inter',sans-serif", letterSpacing: "-0.2px" },
+  ideaMeta: { fontSize: 12, color: "#6B7A90", marginTop: 4, lineHeight: 1.5, fontFamily: "'Inter',sans-serif" },
+  tag: { fontSize: 11, background: "#F0EBE3", color: "#1B2B4B", borderRadius: 8, padding: "3px 8px", fontWeight: 500 },
+  mapsTag: { fontSize: 11, background: "#C85A2A18", color: "#C85A2A", borderRadius: 8, padding: "3px 8px", textDecoration: "none", fontWeight: 600 },
+  mapsBtn: { background: "#fff", color: "#C85A2A", border: "1.5px solid #C85A2A", borderRadius: 8, padding: "6px 12px", fontSize: 11, textDecoration: "none", whiteSpace: "nowrap", fontFamily: "'Inter',sans-serif", fontWeight: 600 },
+  bookedBadge: { fontSize: 11, background: "#10b98115", color: "#059669", borderRadius: 8, padding: "2px 8px", fontWeight: 600 },
   iconBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "2px 4px", opacity: 0.5, transition: "opacity .2s", lineHeight: 1 },
 
   // Budget
-  budgetWrap: { flex: 1, overflow: "auto", padding: 20, background: "#deeaf7" },
+  budgetWrap: { flex: 1, overflow: "auto", padding: 20, background: "#FAF7F2" },
   budgetSummary: { display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" },
-  budgetStat: { background: "#fff", border: "1px solid #a8c4e0", borderRadius: 12, padding: "16px 24px", flex: 1, minWidth: 140 },
-  budgetNum: { fontFamily: "'Pacifico',cursive", fontSize: 24, fontWeight: 400, color: "#e8672a" },
-  budgetLabel: { fontSize: 10, color: "#4a6fa5", marginTop: 4, fontFamily: "'Space Mono',monospace" },
-  budgetDayLabel: { fontFamily: "'Space Mono',monospace", fontWeight: 700, fontSize: 11, color: "#1a3a8f", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 },
-  budgetTable: { width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 10, overflow: "hidden", marginBottom: 4 },
-  th: { padding: "8px 12px", fontSize: 10, color: "#4a6fa5", textAlign: "left", fontWeight: 700, fontFamily: "'Space Mono',monospace" },
-  td: { padding: "10px 12px", fontSize: 12, color: "#1a3a8f", verticalAlign: "middle", fontFamily: "'Space Mono',monospace" },
+  budgetStat: { background: "#fff", border: "1px solid #EDE8E1", borderRadius: 16, padding: "20px 24px", flex: 1, minWidth: 140 },
+  budgetNum: { fontFamily: "'Inter',sans-serif", fontSize: 28, fontWeight: 800, color: "#C85A2A", letterSpacing: "-1px" },
+  budgetLabel: { fontSize: 11, color: "#6B7A90", marginTop: 4, fontFamily: "'Inter',sans-serif", fontWeight: 500 },
+  budgetDayLabel: { fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 11, color: "#1B2B4B", marginBottom: 8, textTransform: "uppercase", letterSpacing: "1.5px" },
+  budgetTable: { width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 16, overflow: "hidden", marginBottom: 8, border: "1px solid #EDE8E1" },
+  th: { padding: "10px 14px", fontSize: 11, color: "#6B7A90", textAlign: "left", fontWeight: 600, fontFamily: "'Inter',sans-serif", letterSpacing: "0.5px" },
+  td: { padding: "12px 14px", fontSize: 13, color: "#1B2B4B", verticalAlign: "middle", fontFamily: "'Inter',sans-serif", fontWeight: 400, lineHeight: 1.5 },
 
   // Journey Map styles
-  mapCard: { width: "min(100%, 380px)", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 12px 32px rgba(26,58,143,.15)", flexShrink: 0, border: "1px solid rgba(255,255,255,0.4)" },
+  mapCard: { width: "min(100%, 380px)", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 12px 32px rgba(27,43,75,.12)", flexShrink: 0, border: "1px solid rgba(255,255,255,0.4)" },
   mapCoverInner: { padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" },
-  mapCoverTitle: { fontFamily: "'Pacifico',cursive", fontSize: 26, color: "#f5e882", marginBottom: 6, lineHeight: 1.3 },
-  mapCoverDates: { fontFamily: "'Space Mono',monospace", fontSize: 11, color: "#a8c4e0", marginBottom: 4 },
+  mapCoverTitle: { fontFamily: "'Pacifico',cursive", fontSize: 26, color: "#F5E882", marginBottom: 6, lineHeight: 1.3 },
+  mapCoverDates: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#C9B8A8", marginBottom: 4, fontWeight: 500 },
   mapCoverStats: { display: "flex", alignItems: "center", gap: 12, marginTop: 16, background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "10px 20px" },
-  mapStat: { textAlign: "center", fontFamily: "'Space Mono',monospace", fontSize: 10, color: "#a8c4e0", lineHeight: 1.8 },
-  mapStatNum: { display: "block", fontFamily: "'Pacifico',cursive", fontSize: 22, color: "#f5e882", lineHeight: 1 },
-  mapStatDivider: { color: "#a8c4e0", fontSize: 18, opacity: 0.4 },
-  mapDayHeader: { padding: "12px 16px 8px", background: "rgba(255,255,255,0.7)", borderBottom: "1px solid rgba(255,255,255,0.5)", display: "flex", alignItems: "baseline", gap: 8, backdropFilter: "blur(4px)" },
-  mapDayNum: { fontFamily: "'Pacifico',cursive", fontSize: 18, color: "#1a3a8f" },
-  mapDayDate: { fontFamily: "'Space Mono',monospace", fontSize: 10, color: "#4a6fa5", flex: 1 },
-  mapDayTrip: { fontFamily: "'Space Mono',monospace", fontSize: 9, color: "#a8c4e0" },
-  mapDayFooter: { padding: "10px 16px", background: "rgba(255,255,255,0.7)", borderTop: "1px solid rgba(255,255,255,0.5)", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "'Space Mono',monospace", fontSize: 10, color: "#4a6fa5" },
+  mapStat: { textAlign: "center", fontFamily: "'Inter',sans-serif", fontSize: 10, color: "#C9B8A8", lineHeight: 1.8 },
+  mapStatNum: { display: "block", fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 22, color: "#F5E882", lineHeight: 1 },
+  mapStatDivider: { color: "#C9B8A8", fontSize: 18, opacity: 0.4 },
+  mapDayHeader: { padding: "12px 16px 8px", background: "rgba(255,255,255,0.85)", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "baseline", gap: 8, backdropFilter: "blur(8px)" },
+  mapDayNum: { fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 18, color: "#1B2B4B" },
+  mapDayDate: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#6B7A90", flex: 1 },
+  mapDayTrip: { fontFamily: "'Inter',sans-serif", fontSize: 10, color: "#C9B8A8" },
+  mapDayFooter: { padding: "10px 16px", background: "rgba(255,255,255,0.85)", borderTop: "1px solid rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#6B7A90" },
 
   // Story — vertical per-day 9:16 cards
   storyOuter: { flex: 1, overflow: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 },
-  storyCoverCard: { width: "min(100%, 380px)", aspectRatio: "9/16", background: "linear-gradient(160deg, #0f2470 0%, #1a3a8f 40%, #2a5298 100%)", border: "none", borderRadius: 24, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(10,20,80,.5)", flexShrink: 0 },
+  storyCoverCard: { width: "min(100%, 380px)", aspectRatio: "9/16", background: "linear-gradient(160deg, #111D33 0%, #1B2B4B 40%, #2C3E6B 100%)", border: "none", borderRadius: 24, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(10,20,50,.5)", flexShrink: 0 },
   storyCoverInner: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "40px 28px 28px", textAlign: "center", gap: 0 },
-  storyCoverEmoji: { fontSize: 48, marginBottom: 12, background: "#e8672a", borderRadius: 16, width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center" },
-  storyCoverTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 26, color: "#f5e882", lineHeight: 1.4, marginBottom: 8 },
-  storyCoverDates: { fontSize: 12, color: "#f5e882", marginBottom: 4, fontFamily: "'Space Mono',monospace" },
-  storyCoverMeta: { fontSize: 12, color: "#a8c4e0", fontFamily: "'Space Mono',monospace", marginTop: 4 },
-  storyCoverTraveller: { fontSize: 12, background: "rgba(255,255,255,0.15)", color: "#fff", borderRadius: 20, padding: "6px 14px", border: "1px solid rgba(255,255,255,0.3)", fontFamily: "'DM Sans',sans-serif", fontWeight: 500, backdropFilter: "blur(4px)" },
-  storyCoverLegend: { display: "flex", flexWrap: "wrap", gap: "8px 14px", justifyContent: "center", marginTop: "auto", padding: "16px 8px", borderTop: "1px solid rgba(255,255,255,.15)" },
-  storyCoverLegendItem: { display: "flex", alignItems: "center", gap: 5, fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.8)", fontWeight: 500 },
-  storyDayCard: { width: "min(100%, 380px)", background: "#fff", border: "1px solid #a8c4e0", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 12px 32px rgba(26,58,143,.15)", flexShrink: 0 },
-  storyDayCardHeader: { padding: "16px 20px 12px", background: "#1a3a8f", borderBottom: "1px solid #1230a0", display: "flex", alignItems: "baseline", justifyContent: "space-between" },
-  storyDayNum: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 22, color: "#f5e882" },
-  storyDayCardDate: { fontSize: 11, color: "#a8c4e0", fontFamily: "'Space Mono',monospace" },
-  storyDayCardTrip: { fontSize: 10, color: "#a8c4e0", textAlign: "right", fontFamily: "'Space Mono',monospace" },
-  storyDayStayBanner: { display: "flex", alignItems: "center", gap: 10, background: "#f0f6ff", borderBottom: "1px solid #a8c4e0", padding: "10px 20px" },
+  storyCoverEmoji: { fontSize: 48, marginBottom: 12, background: "#C85A2A", borderRadius: 16, width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center" },
+  storyCoverTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 26, color: "#F5E882", lineHeight: 1.4, marginBottom: 8 },
+  storyCoverDates: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 4, fontFamily: "'Inter',sans-serif", fontWeight: 500 },
+  storyCoverMeta: { fontSize: 12, color: "rgba(255,255,255,0.5)", fontFamily: "'Inter',sans-serif", marginTop: 4 },
+  storyCoverTraveller: { fontSize: 12, background: "rgba(255,255,255,0.12)", color: "#fff", borderRadius: 20, padding: "6px 14px", border: "1px solid rgba(255,255,255,0.2)", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
+  storyCoverLegend: { display: "flex", flexWrap: "wrap", gap: "8px 14px", justifyContent: "center", marginTop: "auto", padding: "16px 8px", borderTop: "1px solid rgba(255,255,255,.1)" },
+  storyCoverLegendItem: { display: "flex", alignItems: "center", gap: 5, fontFamily: "'Inter',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 500 },
+  storyDayCard: { width: "min(100%, 380px)", background: "#fff", border: "1px solid #EDE8E1", borderRadius: 20, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 4px 24px rgba(27,43,75,.08)", flexShrink: 0 },
+  storyDayCardHeader: { padding: "16px 20px 12px", background: "#1B2B4B", borderBottom: "1px solid #111D33", display: "flex", alignItems: "baseline", justifyContent: "space-between" },
+  storyDayNum: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 22, color: "#F5E882" },
+  storyDayCardDate: { fontSize: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'Inter',sans-serif", fontWeight: 400 },
+  storyDayCardTrip: { fontSize: 10, color: "rgba(255,255,255,0.4)", textAlign: "right", fontFamily: "'Inter',sans-serif" },
+  storyDayStayBanner: { display: "flex", alignItems: "center", gap: 10, background: "#F5F0FF", borderBottom: "1px solid #E8E0FF", padding: "12px 20px" },
   storyDayStops: { flex: 1, padding: "16px 20px", display: "flex", flexDirection: "column", background: "#fff" },
-  storyDayCardFooter: { padding: "10px 20px", borderTop: "1px solid #deeaf7", display: "flex", justifyContent: "space-between", background: "#f0f6ff" },
-  storyMapBtn: { background: "#e8672a", color: "#fff", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 10, textDecoration: "none", flexShrink: 0, whiteSpace: "nowrap", fontFamily: "'Space Mono',monospace" },
-  storyChip: { fontSize: 10, background: "#deeaf7", color: "#1a3a8f", borderRadius: 6, padding: "2px 6px", fontFamily: "'Space Mono',monospace" },
-  storyLink: { fontSize: 9, color: "#e8672a", textDecoration: "none", marginLeft: 4 },
-  storyTraveller: { fontSize: 10, background: "#e8672a22", color: "#e8672a", borderRadius: 10, padding: "2px 8px" },
+  storyDayCardFooter: { padding: "10px 20px", borderTop: "1px solid #F0EBE3", display: "flex", justifyContent: "space-between", background: "#FDFAF7" },
+  storyMapBtn: { background: "#C85A2A", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, textDecoration: "none", flexShrink: 0, whiteSpace: "nowrap", fontFamily: "'Inter',sans-serif", fontWeight: 600 },
+  storyChip: { fontSize: 11, background: "#F0EBE3", color: "#1B2B4B", borderRadius: 6, padding: "3px 8px", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
+  storyLink: { fontSize: 10, color: "#C85A2A", textDecoration: "none", marginLeft: 4, fontWeight: 600 },
+  storyTraveller: { fontSize: 10, background: "#C85A2A18", color: "#C85A2A", borderRadius: 10, padding: "2px 8px", fontWeight: 600 },
 
   // Forms
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" },
-  modal: { background: "#fff", border: "1px solid #a8c4e0", borderRadius: 20, width: "min(calc(100vw - 24px), 540px)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "16px 20px", borderBottom: "1px solid #deeaf7", flexShrink: 0, background: "#1a3a8f" },
-  modalTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 18, color: "#f5e882", flex: 1 },
-  closeBtn: { background: "none", border: "none", color: "#a8c4e0", cursor: "pointer", fontSize: 18, lineHeight: 1 },
-  formGrid: { flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 12, background: "#fff" },
-  formFull: { display: "flex", flexDirection: "column", gap: 4 },
-  formHalf: { display: "flex", flexDirection: "column", gap: 4, flex: 1 },
-  modalFooter: { display: "flex", alignItems: "center", padding: "12px 20px", borderTop: "1px solid #deeaf7", gap: 8, flexShrink: 0, background: "#f0f6ff" },
-  label: { fontSize: 10, color: "#4a6fa5", textTransform: "uppercase", letterSpacing: ".5px", fontWeight: 700, fontFamily: "'Space Mono',monospace" },
-  input: { background: "#f0f6ff", border: "1.5px solid #a8c4e0", borderRadius: 10, padding: "12px 14px", fontSize: 14, color: "#1a3a8f", fontFamily: "'DM Sans',sans-serif", outline: "none", width: "100%", transition: "border-color .2s", WebkitAppearance: "none" },
-  catChip: { border: "none", borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "'Space Mono',monospace", transition: "all .2s" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(27,43,75,.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(6px)" },
+  modal: { background: "#fff", border: "1px solid #EDE8E1", borderRadius: 24, width: "min(calc(100vw - 24px), 540px)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 24px 80px rgba(27,43,75,.2)" },
+  modalHeader: { display: "flex", alignItems: "center", gap: 10, padding: "18px 20px", borderBottom: "1px solid #EDE8E1", flexShrink: 0, background: "#1B2B4B" },
+  modalTitle: { fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 17, color: "#F5E882", flex: 1, letterSpacing: "-0.3px" },
+  closeBtn: { background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 18, lineHeight: 1 },
+  formGrid: { flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14, background: "#fff" },
+  formFull: { display: "flex", flexDirection: "column", gap: 6 },
+  formHalf: { display: "flex", flexDirection: "column", gap: 6, flex: 1 },
+  modalFooter: { display: "flex", alignItems: "center", padding: "14px 20px", borderTop: "1px solid #EDE8E1", gap: 8, flexShrink: 0, background: "#FDFAF7" },
+  label: { fontSize: 11, color: "#6B7A90", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: 600, fontFamily: "'Inter',sans-serif" },
+  input: { background: "#FAF7F2", border: "1.5px solid #EDE8E1", borderRadius: 12, padding: "13px 14px", fontSize: 15, color: "#1B2B4B", fontFamily: "'Inter',sans-serif", outline: "none", width: "100%", transition: "border-color .2s", WebkitAppearance: "none", fontWeight: 400 },
+  catChip: { border: "1.5px solid transparent", borderRadius: 100, padding: "7px 14px", fontSize: 12, cursor: "pointer", fontFamily: "'Inter',sans-serif", transition: "all .2s", fontWeight: 500 },
 
   // Trip setup
-  setupScreen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1a3a8f 0%, #2a5298 60%, #a8c4e0 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
-  setupCard: { background: "#fff", borderRadius: 24, padding: "32px 24px", width: "100%", maxWidth: 480, overflowY: "auto", boxShadow: "0 8px 40px rgba(26,58,143,.3)" },
-  setupTitle: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 28, color: "#1a3a8f", marginTop: 8 },
-  travChip: { background: "#deeaf7", color: "#1a3a8f", borderRadius: 20, padding: "4px 12px", fontSize: 11, display: "flex", alignItems: "center", fontFamily: "'Space Mono',monospace" },
+  setupScreen: { minHeight: "100dvh", background: "linear-gradient(160deg, #1B2B4B 0%, #2C3E6B 60%, #9B8EC4 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" },
+  setupCard: { background: "#fff", borderRadius: 24, padding: "32px 24px", width: "100%", maxWidth: 480, overflowY: "auto", boxShadow: "0 12px 60px rgba(27,43,75,.3)" },
+  setupTitle: { fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 28, color: "#1B2B4B", marginTop: 8, letterSpacing: "-1px" },
+  travChip: { background: "#F0EBE3", color: "#1B2B4B", borderRadius: 20, padding: "5px 14px", fontSize: 12, display: "flex", alignItems: "center", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
 
   // Stay banner
-  stayBanner: { background: "#f0f6ff", border: "1px solid #a8c4e0", borderLeft: "3px solid #6366f1", borderRadius: 10, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
+  stayBanner: { background: "#F5F0FF", border: "1px solid #E0D5FF", borderLeft: "3px solid #9B8EC4", borderRadius: 12, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
 
   // Save button
-  saveBtn: { background: "#f5e882", color: "#1a3a8f", border: "1px solid #f5e882", borderRadius: 8, padding: "8px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "'Space Mono',monospace", whiteSpace: "nowrap", transition: "all .2s" },
-  saveBtnSaved: { background: "#d1fae5", color: "#065f46", borderColor: "#6ee7b7" },
-  saveBtnError: { background: "#fee2e2", color: "#991b1b", borderColor: "#fca5a5" },
+  saveBtn: { background: "#F5E882", color: "#1B2B4B", border: "1px solid #F5E882", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap", transition: "all .2s" },
+  saveBtnSaved: { background: "#D1FAE5", color: "#065F46", borderColor: "#6EE7B7" },
+  saveBtnError: { background: "#FEE2E2", color: "#991B1B", borderColor: "#FCA5A5" },
 
   // Mobile nav
-  mobileNav: { background: "#fff", borderTop: "1px solid #deeaf7", display: "none", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom, 0px)" },
-  mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#a8c4e0", fontSize: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 500, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
-  mnavActive: { color: "#1a3a8f" },
+  mobileNav: { background: "#fff", borderTop: "1px solid #EDE8E1", display: "none", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom, 0px)" },
+  mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#C9B8A8", fontSize: 10, fontFamily: "'Inter',sans-serif", fontWeight: 500, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
+  mnavActive: { color: "#1B2B4B" },
 };
