@@ -20,6 +20,20 @@ const CAT = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 
 const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+// Clean a stop title for use as a Google Maps search waypoint
+function cleanForMaps(title) {
+  return encodeURIComponent(title.replace(/^[^a-zA-Z]*/, "").trim());
+}
+
+// Build a Google Maps multi-stop directions URL — only uses real map links
+function buildDayRouteUrl(stops) {
+  const withLinks = stops.filter(s => s.mapsUrl && s.mapsUrl.trim());
+  if (!withLinks.length) return null;
+  if (withLinks.length === 1) return withLinks[0].mapsUrl;
+  // Use the map URLs directly as waypoints
+  return `https://www.google.com/maps/dir/${withLinks.map(s => encodeURIComponent(s.mapsUrl)).join("/")}`;
+}
+
 // Detect which map app a URL leads to
 function mapLabel(url) {
   if (!url) return null;
@@ -1295,11 +1309,7 @@ function MapView({ trip, ideas }) {
             <div style={styles.mapDayFooter}>
               <span>{allStops.length} stop{allStops.length !== 1 ? "s" : ""}</span>
               {allStops.some(s => s.mapsUrl) && (
-                <a href={(() => {
-                  const waypoints = stops.map(s => s.mapsUrl || encodeURIComponent(s.title));
-                  if (waypoints.length === 1) return waypoints[0] || "#";
-                  return `https://www.google.com/maps/dir/${waypoints.join("/")}`;
-                })()}
+                <a href={buildDayRouteUrl(stops)}
                   target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>
                   🗺 Full day route
                 </a>
@@ -1529,7 +1539,7 @@ export default function TripPlanner() {
             setCurrentTripId(s.trip.id || "default");
             setActiveDay(s.trip.dates?.[0] || null);
             setSavedSnapshot(s);
-            setScreen("app");
+            // Always start on dashboard — don't auto-open into a trip
           }
           if (s.ideas) setIdeas(s.ideas);
         }
@@ -1548,6 +1558,8 @@ export default function TripPlanner() {
     if (!loaded) return;
     const t = setTimeout(async () => {
       try {
+        const tripKey = trip?.id ? `trip-${trip.id}` : STORAGE_KEY;
+        localStorage.setItem(tripKey, JSON.stringify({ trip, ideas }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ trip, ideas }));
         if (trip) saveToIndex(trip, ideas);
         setSaveStatus("saved");
@@ -1738,21 +1750,47 @@ export default function TripPlanner() {
   if (!loaded) return <div style={{ background: "#FAF7F2", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>Loading…</div>;
 
   if (screen === "dashboard") return (
-    <TripDashboard
-      onSample={() => setShowMarketplace(true)}
-      onSelect={(id) => {
-        // For now just load the current saved trip
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (raw) {
-            const s = JSON.parse(raw);
-            if (s.trip) { setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null); }
-          }
-        } catch {}
-        setScreen("app");
-      }}
-      onNew={() => { setTrip(null); setIdeas([]); setScreen("setup"); }}
-    />
+    <>
+      <TripDashboard
+        onSample={() => setShowMarketplace(true)}
+        onSelect={(id) => {
+          try {
+            const tripKey = `trip-${id}`;
+            const raw = localStorage.getItem(tripKey) || localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              const s = JSON.parse(raw);
+              if (s.trip && s.trip.id === id) {
+                setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null);
+              } else {
+                const raw2 = localStorage.getItem(STORAGE_KEY);
+                if (raw2) { const s2 = JSON.parse(raw2); if (s2.trip) { setTrip(s2.trip); setIdeas(s2.ideas || []); setActiveDay(s2.trip.dates?.[0] || null); } }
+              }
+            }
+          } catch {}
+          setScreen("app");
+        }}
+        onNew={() => { setTrip(null); setIdeas([]); setScreen("setup"); }}
+      />
+      {showMarketplace && (
+        <TripMarketplace
+          onClose={() => setShowMarketplace(false)}
+          onLoadTrip={(newTrip, newIdeas) => {
+            const today = new Date().toISOString().slice(0, 10);
+            const endDate = new Date(Date.now() + 6*24*60*60*1000).toISOString().slice(0, 10);
+            const dates = [];
+            for (let d = new Date(today); d <= new Date(endDate); d.setDate(d.getDate()+1)) {
+              dates.push(d.toISOString().slice(0,10));
+            }
+            const tripWithDates = { ...newTrip, id: 'trip-' + Date.now(), start: today, end: endDate, dates };
+            setTrip(tripWithDates);
+            setIdeas(newIdeas);
+            setActiveDay(today);
+            setShowMarketplace(false);
+            setScreen("app");
+          }}
+        />
+      )}
+    </>
   );
 
   if (screen === "setup") return <TripSetup
@@ -1768,6 +1806,7 @@ export default function TripPlanner() {
         const existing = raw ? JSON.parse(raw) : [];
         const updated = [{ id: tripObj.id, name: tripObj.name, start: tripObj.start, end: tripObj.end, travellers: tripObj.travellers, ideaCount: 0 }, ...existing.filter(t => t.id !== tripObj.id)];
         localStorage.setItem("tripplanner-trips-index", JSON.stringify(updated));
+        localStorage.setItem(`trip-${tripObj.id}`, JSON.stringify({ trip: tripObj, ideas: [] }));
       } catch {}
       setScreen("app");
     }}
@@ -1785,14 +1824,14 @@ export default function TripPlanner() {
         input,select,textarea{color-scheme:light;font-family:'Inter',sans-serif;}
         a{color:inherit;}
         button{-webkit-tap-highlight-color:transparent;}
-        /* Sidebar/panel — toggled by bottom nav on mobile */
+        /* Sidebar/panel -- toggled by bottom nav on mobile */
         .sidebar{display:none!important;}
         .sidebar.show{display:flex!important;}
         .main-panel{display:none!important;}
         .main-panel.show{display:flex!important;}
         /* Bottom nav always visible */
         .mobile-nav{display:flex!important;}
-        /* Top tab bar hidden — bottom nav handles it */
+        /* Top tab bar hidden -- bottom nav handles it */
         .tab-row-bar{display:none!important;}
         `}</style>
 
@@ -1861,11 +1900,19 @@ export default function TripPlanner() {
         <TripMarketplace
           onClose={() => setShowMarketplace(false)}
           onLoadTrip={(newTrip, newIdeas) => {
-            setTrip(newTrip);
+            // Give it proper dates spanning next 7 days as placeholder
+            const today = new Date().toISOString().slice(0, 10);
+            const end = new Date(Date.now() + 6*24*60*60*1000).toISOString().slice(0, 10);
+            const dates = [];
+            for (let d = new Date(today); d <= new Date(end); d.setDate(d.getDate()+1)) {
+              dates.push(d.toISOString().slice(0,10));
+            }
+            const tripWithDates = { ...newTrip, id: newTrip.id || ('trip-' + Date.now()), start: today, end, dates };
+            setTrip(tripWithDates);
             setIdeas(newIdeas);
-            setActiveDay(null);
-            setScreen("setup");
+            setActiveDay(today);
             setShowMarketplace(false);
+            setScreen("app");
           }}
         />
       )}
@@ -2045,16 +2092,10 @@ export default function TripPlanner() {
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexShrink: 0 }}>
                   <div style={styles.dayTitle}>{activeDay ? fmtDate(activeDay) : "—"}</div>
-                  {activeDay && scheduled[activeDay]?.length > 0 && (
-                    <a href={(() => {
-                        const stops = scheduled[activeDay] || [];
-                        // Use mapsUrl directly when available — much more accurate than titles
-                        const waypoints = stops.map(s => s.mapsUrl || encodeURIComponent(s.title));
-                        if (waypoints.length === 1) return waypoints[0] || "#";
-                        return `https://www.google.com/maps/dir/${waypoints.join("/")}`;
-                      })()}
-                      target="_blank" rel="noopener noreferrer" style={styles.mapsBtn}>🗺 Day Route</a>
-                  )}
+                  {activeDay && scheduled[activeDay]?.length > 0 && (() => {
+                      const url = buildDayRouteUrl(scheduled[activeDay] || []);
+                      return url ? <a href={url} target="_blank" rel="noopener noreferrer" style={styles.mapsBtn}>🗺 Day Route</a> : null;
+                    })()}
                 </div>
 
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
