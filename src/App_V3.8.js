@@ -133,7 +133,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
           <div style={styles.formFull}>
             <label style={styles.label}>What is it? *</label>
             <input style={styles.input}
-              placeholder="Name or paste a Google Maps / website link…"
+              placeholder="Name or paste a Google Maps / website link..."
               value={form.title}
               autoFocus
               onChange={e => {
@@ -316,7 +316,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
             <div>
               <label style={styles.label}>Google Maps / AMap link</label>
               <input style={{ ...styles.input, marginTop: 6, ...(form.mapsUrl ? { borderColor: "#10b981" } : {}) }}
-                placeholder="Paste Google Maps or AMap (高德) link…"
+                placeholder="Paste Google Maps or AMap (高德) link..."
                 value={form.mapsUrl}
                 onChange={e => set("mapsUrl", e.target.value)}
                 onPaste={e => {
@@ -328,7 +328,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
                 }} />
             </div>
             <div>
-              <label style={styles.label}>More Info link <span style={{ color: "#C9B8A8", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— TikTok, article, booking page…</span></label>
+              <label style={styles.label}>More Info link <span style={{ color: "#C9B8A8", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— TikTok, article, booking page...</span></label>
               <input style={{ ...styles.input, marginTop: 6, ...(form.infoUrl ? { borderColor: "#9B8EC4" } : {}) }}
                 placeholder="https://tiktok.com/... or booking link"
                 value={form.infoUrl || ""}
@@ -518,7 +518,7 @@ function TripMarketplace({ onLoadTrip, onClose }) {
                         </div>
                       );
                     })}
-                    {sample.ideas.length > 4 && <div style={{ fontSize: 11, color: "#C9B8A8" }}>+{sample.ideas.length - 4} more stops…</div>}
+                    {sample.ideas.length > 4 && <div style={{ fontSize: 11, color: "#C9B8A8" }}>+{sample.ideas.length - 4} more stops...</div>}
                   </div>
                 </div>
               )}
@@ -608,7 +608,20 @@ function TripDashboard({ onSelect, onNew, onSample }) {
                   <span style={dashStyles.tripStat}>{"📍"} {trip.ideaCount || 0} stops</span>
                 </div>
               </div>
-              <div style={{ fontSize: 22, color: "#C9B8A8", fontWeight: 300 }}>›</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={e => {
+                  e.stopPropagation();
+                  if (window.confirm('Delete ' + trip.name + '? This cannot be undone.')) {
+                    try {
+                      localStorage.removeItem('trip-' + trip.id);
+                      const raw = localStorage.getItem(TRIPS_INDEX_KEY);
+                      if (raw) localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(JSON.parse(raw).filter(t => t.id !== trip.id)));
+                      setTrips(t => t.filter(t2 => t2.id !== trip.id));
+                    } catch {}
+                  }
+                }} style={{ background: 'none', border: 'none', color: '#C9B8A8', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}>🗑</button>
+                <div style={{ fontSize: 22, color: "#C9B8A8", fontWeight: 300 }}>›</div>
+              </div>
             </div>
           ))
         )}
@@ -1588,17 +1601,25 @@ export default function TripPlanner() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
 
-  const saveToIndex = (t, i) => {   try {     const raw = localStorage.getItem(TRIPS_INDEX_KEY);     const index = raw ? JSON.parse(raw) : [];     const entry = {       id: t.id || "default",       name: t.name, start: t.start, end: t.end,       travellers: t.travellers,       ideaCount: i.filter(x => x.date).length,       tripData: t,       ideasData: i,     };     const exists = index.findIndex(x => x.id === entry.id);     if (exists > -1) index[exists] = entry;     else index.unshift(entry);     localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(index));   } catch {} };
+  const saveToIndex = (t, i) => {
     try {
       const raw = localStorage.getItem(TRIPS_INDEX_KEY);
       const index = raw ? JSON.parse(raw) : [];
-      const entry = { id: t.id || "default", name: t.name, start: t.start, end: t.end, travellers: t.travellers, ideaCount: i.filter(x => x.date).length };
+      const entry = {
+        id: t.id || "default",
+        name: t.name, start: t.start, end: t.end,
+        travellers: t.travellers,
+        ideaCount: i.filter(x => x.date).length,
+        tripData: t,
+        ideasData: i,
+      };
       const exists = index.findIndex(x => x.id === entry.id);
       if (exists > -1) index[exists] = entry;
       else index.unshift(entry);
       localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(index));
     } catch {}
   };
+
 
   const manualSave = async () => {
     setSaveStatus("saving");
@@ -1755,45 +1776,41 @@ export default function TripPlanner() {
   }, []);
   const isMobile = windowWidth < 1024;
 
-  if (!loaded) return <div style={{ background: "#FAF7F2", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>Loading…</div>;
+  if (!loaded) return <div style={{ background: "#FAF7F2", height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontFamily: "'Inter',sans-serif" }}>Loading...</div>;
 
   if (screen === "dashboard") return (
     <>
       <TripDashboard
         onSample={() => setShowMarketplace(true)}
-        onSelect={(id) => {   try {     const indexRaw = localStorage.getItem(TRIPS_INDEX_KEY);     if (indexRaw) {       const index = JSON.parse(indexRaw);       const entry = index.find(x => x.id === id);       if (entry?.tripData) {         setTrip(entry.tripData);         setIdeas(entry.ideasData || []);         setActiveDay(entry.tripData.dates?.[0] || null);         setScreen("app"); return;       }     }     const main = localStorage.getItem(STORAGE_KEY);     if (main) {       const s = JSON.parse(main);       if (s.trip) { setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null); }     }   } catch {}   setScreen("app"); }}
+        onSelect={(id) => {
           try {
-            // 1. Try the dedicated per-trip key
-            const tripKey = `trip-${id}`;
-            const dedicated = localStorage.getItem(tripKey);
-            if (dedicated) {
-              const s = JSON.parse(dedicated);
-              setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null);
-              setScreen("app"); return;
-            }
-            // 2. Try the main STORAGE_KEY (last opened trip)
-            const main = localStorage.getItem(STORAGE_KEY);
-            if (main) {
-              const s = JSON.parse(main);
-              if (s.trip?.id === id) {
-                setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null);
-                setScreen("app"); return;
+            // Try trips index first (stores full data)
+            const indexRaw = localStorage.getItem(TRIPS_INDEX_KEY);
+            if (indexRaw) {
+              const index = JSON.parse(indexRaw);
+              const entry = index.find(x => x.id === id);
+              if (entry?.tripData) {
+                setTrip(entry.tripData);
+                setIdeas(entry.ideasData || []);
+                setActiveDay(entry.tripData.dates?.[0] || null);
+                setTab('plan');
+                setScreen('app'); return;
               }
             }
-            // 3. Search all localStorage keys for this trip id
+            // Scan all localStorage keys as fallback
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
-              if (!key) continue;
               try {
                 const val = JSON.parse(localStorage.getItem(key));
                 if (val?.trip?.id === id) {
-                  setTrip(val.trip); setIdeas(val.ideas || []); setActiveDay(val.trip.dates?.[0] || null);
-                  setScreen("app"); return;
+                  setTrip(val.trip); setIdeas(val.ideas || []);
+                  setActiveDay(val.trip.dates?.[0] || null);
+                  setTab('plan'); setScreen('app'); return;
                 }
               } catch {}
             }
           } catch {}
-          setScreen("app");
+          setScreen('app');
         }}
         onNew={() => { setTrip(null); setIdeas([]); setScreen("setup"); }}
       />
