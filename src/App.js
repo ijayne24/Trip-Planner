@@ -365,7 +365,7 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={styles.ideaTitle}>{idea.title}</span>
             {idea.bookedStatus === "booked" && <span style={styles.bookedBadge}>✅ Booked</span>}
-            {idea.bookedStatus === "need-to-book" && <span style={{ ...styles.bookedBadge, background: "#f59e0b22", color: "#f59e0b" }}>📋 Book</span>}
+            {idea.bookedStatus === "need-to-book" && <span style={{ ...styles.bookedBadge, background: "#f59e0b22", color: "#f59e0b" }}>📋 To Book</span>}
           </div>
           {!compact && idea.place && <div style={styles.ideaMeta}>📍 {idea.place}</div>}
           {!compact && idea.notes && <div style={{ ...styles.ideaMeta, fontStyle: "italic" }}>{idea.notes}</div>}
@@ -1430,9 +1430,14 @@ function StoryView({ trip, ideas }) {
                             {item.cost && <span style={{ ...styles.storyChip, color: "#f59e0b" }}>💰 {item.cost} {item.currency}</span>}
                           </div>
                         </div>
-                        {item.mapsUrl && (
-                          <a href={item.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>🗺</a>
-                        )}
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
+                          {item.mapsUrl && (
+                            <a href={item.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>🗺 Map</a>
+                          )}
+                          {item.infoUrl?.trim() && (
+                            <a href={item.infoUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.storyMapBtn, background: "#9B8EC4" }}>🔗 More</a>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
