@@ -1579,7 +1579,13 @@ export default function TripPlanner() {
     if (!scheduled[i.date]) scheduled[i.date] = [];
     scheduled[i.date].push(i);
   });
-  Object.values(scheduled).forEach(arr => arr.sort((a,b) => (a.time||"99:99") > (b.time||"99:99") ? 1 : -1));
+  Object.values(scheduled).forEach(arr => arr.sort((a,b) => {
+    // Items with no time keep their current order (drag-reordered)
+    if (!a.time && !b.time) return 0;
+    if (!a.time) return 1;  // no time goes to end
+    if (!b.time) return -1; // no time goes to end
+    return a.time > b.time ? 1 : -1; // earliest time first
+  }));
 
   const poolIdeas = ideas.filter(i => !i.date);
 
@@ -1660,7 +1666,12 @@ export default function TripPlanner() {
   const reorderInDay = (ideaId, dayDate, toIndex) => {
     setIdeas(prev => {
       const dayIdeas = prev.filter(i => i.date === dayDate && i.category !== "accommodation")
-        .sort((a,b) => (a.time||"99:99") > (b.time||"99:99") ? 1 : -1);
+        .sort((a,b) => {
+          if (!a.time && !b.time) return 0;
+          if (!a.time) return 1;
+          if (!b.time) return -1;
+          return a.time > b.time ? 1 : -1;
+        });
       const others = prev.filter(i => i.date !== dayDate || i.category === "accommodation");
       const fromIndex = dayIdeas.findIndex(i => i.id === ideaId);
       if (fromIndex === -1 || fromIndex === toIndex) return prev;
