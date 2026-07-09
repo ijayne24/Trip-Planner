@@ -497,7 +497,7 @@ function TripMarketplace({ onLoadTrip, onClose }) {
             </button>
             <button style={{ ...styles.btnPrimary, flex: 1, opacity: selected ? 1 : 0.4, pointerEvents: selected ? "auto" : "none", fontSize: 13, padding: "11px 12px" }}
               onClick={() => selected && handleLoad(selected)}>
-              Load into my Flok →
+              Load into my Flokk →
             </button>
           </div>
           <div style={{ fontSize: 11, color: "#C9B8A8", textAlign: "center", fontFamily: "'Inter',sans-serif" }}>More curated trips coming soon 🦩</div>
@@ -547,8 +547,8 @@ function TripDashboard({ onSelect, onNew, onSample }) {
           <text x="260" y="90" fontSize="8" opacity="0.5">✦</text>
         </svg>
         <div style={dashStyles.heroContent}>
-          <div style={dashStyles.heroTitle}>Trip Planner</div>
-          <div style={dashStyles.heroSub}>Where do you want to go?</div>
+          <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 42, color: "#F5E882", lineHeight: 1.1, marginBottom: 4 }}>Flokk 🦩</div>
+          <div style={dashStyles.heroSub}>Where does your flock want to go?</div>
         </div>
       </div>
 
@@ -797,6 +797,7 @@ function exportSampleHTML(sample) {
             ${item.time ? `<span class="chip">🕐 ${item.time}</span>` : ''}
             ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ''}
             ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn" target="_blank">🗺 Map</a>` : ''}
+            ${item.infoUrl ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4" target="_blank">🔗 More</a>` : ''}
           </div>
         </div>
       </div>`;
@@ -805,7 +806,7 @@ function exportSampleHTML(sample) {
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${sample.name} — Flok</title>
+<title>${sample.name} — Flokk</title>
 <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -832,7 +833,7 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 .stop-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
 .chip{font-size:12px;background:#F0EBE3;color:#1B2B4B;border-radius:8px;padding:4px 10px;border:1px solid #EDE8E1;}
 .chip-cost{color:#C85A2A;background:#FFF5F0;border-color:#FFD0B5;}
-.map-btn{font-size:12px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:6px 14px;text-decoration:none;font-weight:600;display:inline-block;}
+.map-btn{font-size:12px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:6px 14px;text-decoration:none;font-weight:600;display:inline-block;} .info-btn{font-size:12px;background:#9B8EC4;color:#fff;border:none;border-radius:10px;padding:6px 14px;text-decoration:none;font-weight:600;display:inline-block;}
 .flok-banner{margin:24px 12px 0;background:linear-gradient(135deg,#1B2B4B 0%,#C85A2A 100%);border-radius:20px;padding:32px 24px;text-align:center;}
 .flok-banner h2{font-family:'Pacifico',cursive;font-size:22px;color:#F5E882;margin:10px 0 8px;}
 .flok-banner p{font-size:14px;color:rgba(255,255,255,0.75);line-height:1.6;margin-bottom:20px;}
@@ -857,9 +858,9 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 </div>
 <div class="flok-banner">
   <div style="font-size:36px">🦩</div>
-  <h2>Made with Flok</h2>
+  <h2>Made with Flokk</h2>
   <p>Plan your next trip with your whole crew.<br/>Free to use · No download needed · Works on any device.</p>
-  <a href="https://trip-planner-nine-gray.vercel.app" class="flok-btn">🦩 Plan your own trip on Flok →</a>
+  <a href="https://trip-planner-nine-gray.vercel.app" class="flok-btn">🦩 Plan your own trip on Flokk →</a>
   <div class="flok-url">trip-planner-nine-gray.vercel.app</div>
 </div>
 </body></html>`;
@@ -868,7 +869,7 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${sample.name.replace(/[^a-z0-9]/gi,"_")}_by_Flok.html`;
+  a.download = `${sample.name.replace(/[^a-z0-9]/gi,"_")}_by_Flokk.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -947,6 +948,7 @@ function exportStoryHTML(trip, ideas) {
               ${item.time ? `<span class="chip">${item.time}</span>` : ""}
               ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ""}
               ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn">🗺 Map</a>` : ""}
+              ${item.infoUrl ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4">🔗 More</a>` : ""}
             </div>
           </div>
         </div>`;
@@ -1013,7 +1015,7 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 .stop-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
 .chip{font-size:13px;background:#FAF7F2;color:#1B2B4B;border-radius:8px;padding:4px 10px;border:1px solid #FAF7F2;}
 .chip-cost{color:#C85A2A;background:#fff5f0;border-color:#ffd0b5;}
-.map-btn{font-size:13px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;}
+.map-btn{font-size:13px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;} .info-btn{font-size:13px;background:#9B8EC4;color:#fff;border:none;border-radius:10px;padding:8px 16px;text-decoration:none;white-space:nowrap;display:inline-block;font-weight:600;}
 .day-footer{padding:12px 20px;border-top:1px solid #FAF7F2;display:flex;justify-content:space-between;background:#fafcff;font-size:12px;color:#C9B8A8;}
 </style></head>
 <body>
@@ -1021,17 +1023,17 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 ${coverHtml}
 ${dayCards}
 
-<!-- Made with Flok footer -->
+<!-- Made with Flokk footer -->
 <div style="margin:24px 12px 0;background:linear-gradient(135deg,#1B2B4B 0%,#C85A2A 100%);border-radius:20px;padding:32px 24px;text-align:center;">
   <div style="font-size:36px;margin-bottom:10px">🦩</div>
-  <div style="font-family:'Pacifico',cursive;font-size:24px;color:#F5E882;margin-bottom:8px">Made with Flok</div>
+  <div style="font-family:'Pacifico',cursive;font-size:24px;color:#F5E882;margin-bottom:8px">Made with Flokk</div>
   <div style="font-size:14px;color:rgba(255,255,255,0.75);margin-bottom:20px;line-height:1.7;font-family:'Inter',sans-serif;">
     Plan your next trip with your whole crew.<br/>
     Free to use · No download needed · Works on any device.
   </div>
   <a href="https://trip-planner-nine-gray.vercel.app"
     style="display:inline-block;background:#F5E882;color:#1B2B4B;font-family:'Inter',sans-serif;font-weight:800;font-size:15px;padding:14px 32px;border-radius:100px;text-decoration:none;letter-spacing:-0.3px;">
-    🦩 Plan your own trip on Flok →
+    🦩 Plan your own trip on Flokk →
   </a>
   <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:16px;font-family:'Inter',sans-serif;letter-spacing:0.5px;">trip-planner-nine-gray.vercel.app</div>
 </div>
@@ -1472,7 +1474,7 @@ export default function TripPlanner() {
     meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
   }, []);
 
-  // Show welcome message if arriving from a shared Flok itinerary
+  // Show welcome message if arriving from a shared Flokk itinerary
   const [showWelcomeBanner, setShowWelcomeBanner] = useState(() => {
     try {
       const ref = document.referrer || "";
@@ -1778,7 +1780,7 @@ export default function TripPlanner() {
               <span style={{ fontSize: 32, flexShrink: 0 }}>🦩</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 16, color: "#F5E882", marginBottom: 4 }}>
-                  Welcome to Flok!
+                  Welcome to Flokk!
                 </div>
                 <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", lineHeight: 1.5, marginBottom: 12 }}>
                   Someone shared a trip with you. Plan your own — free, no account needed.
@@ -2318,4 +2320,3 @@ const styles = {
   mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#C9B8A8", fontSize: 10, fontFamily: "'Inter',sans-serif", fontWeight: 500, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
   mnavActive: { color: "#1B2B4B" },
 };
-
