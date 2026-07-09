@@ -378,7 +378,7 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
             {idea.cost && <span style={styles.tag}>💰 {idea.cost} {idea.currency}{idea.splitBetween?.length > 0 ? ` ÷${idea.splitBetween.length}` : ""}</span>}
             {idea.paidBy && <span style={styles.tag}>👤 {idea.paidBy}</span>}
             {idea.mapsUrl && (() => { const ml = mapLabel(idea.mapsUrl); return <a href={idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.mapsTag, background: ml.color + "18", color: ml.color }} onClick={e => e.stopPropagation()}>{ml.icon} {ml.label}</a>; })()}
-            {idea.infoUrl && <a href={idea.infoUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.mapsTag, background: "#9B8EC422", color: "#9B8EC4" }} onClick={e => e.stopPropagation()}>🔗 More</a>}
+            {idea.infoUrl?.trim() && <a href={idea.infoUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.mapsTag, background: "#9B8EC422", color: "#9B8EC4" }} onClick={e => e.stopPropagation()}>🔗 More</a>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
@@ -797,7 +797,7 @@ function exportSampleHTML(sample) {
             ${item.time ? `<span class="chip">🕐 ${item.time}</span>` : ''}
             ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ''}
             ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn" target="_blank">🗺 Map</a>` : ''}
-            ${item.infoUrl ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4" target="_blank">🔗 More</a>` : ''}
+            ${item.infoUrl?.trim() ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4" target="_blank">🔗 More</a>` : ''}
           </div>
         </div>
       </div>`;
@@ -948,7 +948,7 @@ function exportStoryHTML(trip, ideas) {
               ${item.time ? `<span class="chip">${item.time}</span>` : ""}
               ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ""}
               ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn">🗺 Map</a>` : ""}
-              ${item.infoUrl ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4">🔗 More</a>` : ""}
+              ${item.infoUrl?.trim() ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4">🔗 More</a>` : ""}
             </div>
           </div>
         </div>`;
