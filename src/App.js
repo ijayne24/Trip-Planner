@@ -410,22 +410,29 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
 // ─── Sample trips data ────────────────────────────────────────────────────────
 const SAMPLE_TRIPS = [
   {
-    id: "sample-singapore-1day",
-    name: "One Day in Singapore",
+    id: "sample-singapore-layover",
+    name: "One Day Layover in Singapore",
     emoji: "🦁",
-    description: "The perfect 24 hours — hawker food, Gardens by the Bay, and a rooftop sunset.",
-    tags: ["Free", "1 Day", "Solo or Couple"],
-    duration: "1 day",
+    description: "A packed Katong & Joo Chiat day — coffee, Peranakan culture, street murals, record stores, desserts, and sunset views at Marina Bay Sands.",
+    tags: ["Free", "1–2 Days", "Solo or Group"],
+    duration: "1-2 days",
     price: 0,
     color: "#C85A2A",
-    trip: { name: "One Day in Singapore", start: "", end: "", travellers: [], currency: "SGD", dates: [] },
+    trip: { name: "One Day Layover in Singapore", start: "", end: "", travellers: [], currency: "SGD", dates: [] },
     ideas: [
-      { id: "s1-1", title: "Tian Tian Chicken Rice", category: "food", time: "08:00", place: "Maxwell Food Centre", mapsUrl: "https://maps.google.com/?q=Maxwell+Food+Centre+Singapore", notes: "Arrive early — queue gets long by 9am", cost: "5", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
-      { id: "s1-2", title: "Gardens by the Bay", category: "activity", time: "10:00", place: "18 Marina Gardens Dr, Singapore", mapsUrl: "https://maps.google.com/?q=Gardens+by+the+Bay+Singapore", notes: "Free outdoor gardens. Cloud Forest & Flower Dome cost extra", cost: "0", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
-      { id: "s1-3", title: "Satay by the Bay", category: "food", time: "13:00", place: "18 Marina Gardens Dr, Singapore", mapsUrl: "https://maps.google.com/?q=Satay+by+the+Bay+Singapore", notes: "Alfresco hawker by the water. Try the stingray!", cost: "20", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
-      { id: "s1-4", title: "Chinatown Heritage Walk", category: "monument", time: "15:00", place: "Chinatown, Singapore", mapsUrl: "https://maps.google.com/?q=Chinatown+Singapore", notes: "Sri Mariamman Temple → Buddha Tooth Relic Temple", cost: "0", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
-      { id: "s1-5", title: "Lau Pa Sat Satay Street", category: "food", time: "18:30", place: "18 Raffles Quay, Singapore", mapsUrl: "https://maps.google.com/?q=Lau+Pa+Sat+Singapore", notes: "Iconic Victorian hawker centre. Satay street opens at 7pm", cost: "25", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
-      { id: "s1-6", title: "Marina Bay Sands Skypark", category: "monument", time: "20:00", place: "10 Bayfront Ave, Singapore", mapsUrl: "https://maps.google.com/?q=Marina+Bay+Sands+Singapore", notes: "Observation deck $32. Or watch the light show from the waterfront for free at 8pm and 9pm", cost: "32", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-stay", title: "Crown Plaza", category: "accommodation", date: "", checkOut: "", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/zekaMfJ8Jhj7SJANA?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-1", title: "Sunset views at Lavo at Marina Bay Sands", category: "food", time: "19:00", place: "", mapsUrl: "https://maps.app.goo.gl/ASTx8ZiMEsXmU1Bv7?g_st=ic", infoUrl: "", notes: "Get reservations at Lavo or Spago to head to the top of the iconic Marina Bay Sands without paying for the observation deck prices!", cost: "", currency: "SGD", bookedStatus: "need-to-book", splitBetween: [], paidBy: "" },
+      { id: "sg-2", title: "Grab coffee at this hole-in-the-wall Kopi Khoo store", category: "food", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/VZbkFtM1vxSFV7VP6?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-3", title: "Snap some photos at the Peranakan Houses", category: "activity", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/NBNWqDv9exBHG2jv6?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-4", title: "Check out Tiger and Arcadia", category: "shopping", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/UnsSynYYURMT8AXX9?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-5", title: "Check out the murals of Joo Chiat", category: "monument", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/K6YzFRrUysTQvaB16?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-6", title: "Local souvenirs at Cat Socretes", category: "shopping", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/FiPcf6k2BmxTVPtLA?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-7", title: "Check out records at Retro Crates", category: "shopping", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/UrE4YBQTkpjzniHPA?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-8", title: "Learn about Peranakan Culture at Kim Choo", category: "activity", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/i5tLThEAgFs6jf1h6?g_st=ic", infoUrl: "", notes: "", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-9", title: "Dessert: Birds of Paradise ice cream", category: "food", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/7MEMy1TCqv5FQE9E7?g_st=ic", infoUrl: "", notes: "Be sure to try their thyme-infused cones and cool off with their refreshing flavors!", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-10", title: "Dessert: Aunty Peng's Banana Pie", category: "food", time: "", place: "", mapsUrl: "https://maps.app.goo.gl/XSHQAeD3bJBeZSE96?g_st=ic", infoUrl: "", notes: "Try a slice and also ask for the mini chocolate tarts.", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-11", title: "Lunch: Chicken rice at Katong Mei Wei", category: "food", time: "", place: "Katong Shopping Center", mapsUrl: "https://maps.app.goo.gl/ZvPB1bKf49DceN3r9?g_st=ic", infoUrl: "https://vt.tiktok.com/ZSCKGLR1V/", notes: "Pay with cash, order the roasted chicken! Tell them how many people you have and your preferred part of the chicken to eat.", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sg-12", title: "Wander around Jewel Changi", category: "activity", time: "", place: "", mapsUrl: "", infoUrl: "https://vt.tiktok.com/ZSCKsEVQo/", notes: "You can drop your bags off and check in at Jewel and wander around before heading into the transit area!", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
     ]
   },
 ];
@@ -1288,7 +1295,11 @@ function MapView({ trip, ideas }) {
             <div style={styles.mapDayFooter}>
               <span>{allStops.length} stop{allStops.length !== 1 ? "s" : ""}</span>
               {allStops.some(s => s.mapsUrl) && (
-                <a href={`https://www.google.com/maps/dir/${stops.filter(s=>s.title).map(s=>encodeURIComponent(s.title)).join("/")}`}
+                <a href={(() => {
+                  const waypoints = stops.map(s => s.mapsUrl || encodeURIComponent(s.title));
+                  if (waypoints.length === 1) return waypoints[0] || "#";
+                  return `https://www.google.com/maps/dir/${waypoints.join("/")}`;
+                })()}
                   target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>
                   🗺 Full day route
                 </a>
@@ -2035,7 +2046,13 @@ export default function TripPlanner() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexShrink: 0 }}>
                   <div style={styles.dayTitle}>{activeDay ? fmtDate(activeDay) : "—"}</div>
                   {activeDay && scheduled[activeDay]?.length > 0 && (
-                    <a href={`https://www.google.com/maps/dir/${scheduled[activeDay].filter(i=>i.mapsUrl).map(i=>encodeURIComponent(i.title)).join("/")}`}
+                    <a href={(() => {
+                        const stops = scheduled[activeDay] || [];
+                        // Use mapsUrl directly when available — much more accurate than titles
+                        const waypoints = stops.map(s => s.mapsUrl || encodeURIComponent(s.title));
+                        if (waypoints.length === 1) return waypoints[0] || "#";
+                        return `https://www.google.com/maps/dir/${waypoints.join("/")}`;
+                      })()}
                       target="_blank" rel="noopener noreferrer" style={styles.mapsBtn}>🗺 Day Route</a>
                   )}
                 </div>
