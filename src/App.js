@@ -349,18 +349,18 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
 function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDragEnd, onTouchStart, onTouchMove, onTouchEnd, compact }) {
   const cat = CAT[idea.category] || CAT.misc;
   return (
-    <div style={{ ...styles.ideaCard, borderLeftColor: cat.color, opacity: 1, cursor: "default" }}>
+    <div style={{ ...styles.ideaCard, borderLeftColor: cat.color, opacity: 1, cursor: "default", userSelect: "none", WebkitUserSelect: "none" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        {/* Drag handle — only this triggers drag */}
+        {/* Drag handle — big enough to tap comfortably */}
         <div
           draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "2px 4px 2px 0", cursor: "grab", flexShrink: 0, touchAction: "none", userSelect: "none", opacity: 0.35 }}>
-          <div style={{ width: 14, height: 2, borderRadius: 1, background: "#1B2B4B" }} />
-          <div style={{ width: 14, height: 2, borderRadius: 1, background: "#1B2B4B" }} />
-          <div style={{ width: 14, height: 2, borderRadius: 1, background: "#1B2B4B" }} />
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, width: 28, minHeight: 44, padding: "0 6px", cursor: "grab", flexShrink: 0, touchAction: "none", userSelect: "none", WebkitUserSelect: "none", opacity: 0.3 }}>
+          <div style={{ width: 16, height: 2, borderRadius: 2, background: "#1B2B4B" }} />
+          <div style={{ width: 16, height: 2, borderRadius: 2, background: "#1B2B4B" }} />
+          <div style={{ width: 16, height: 2, borderRadius: 2, background: "#1B2B4B" }} />
         </div>
-        <span style={{ fontSize: 18, flexShrink: 0 }}>{cat.icon}</span>
+        <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>{cat.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={styles.ideaTitle}>{idea.title}</span>
@@ -2248,7 +2248,7 @@ const styles = {
 
   dropHint: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#6B7A90", fontSize: 13, textAlign: "center", border: "2px dashed #C9B8A8", borderRadius: 16, margin: 8, padding: 32, fontFamily: "'Inter',sans-serif" },
 
-  ideaCard: { background: "#fff", border: "1px solid #EDE8E1", borderLeft: "3px solid #555", borderRadius: 16, padding: "14px 16px", cursor: "default", transition: "all .2s", boxShadow: "0 1px 6px rgba(27,43,75,0.06)" },
+  ideaCard: { background: "#fff", border: "1px solid #EDE8E1", borderLeft: "3px solid #555", borderRadius: 16, padding: "12px 12px 12px 4px", cursor: "default", transition: "all .2s", boxShadow: "0 1px 6px rgba(27,43,75,0.06)", userSelect: "none", WebkitUserSelect: "none" },
   ideaTitle: { fontSize: 14, color: "#1B2B4B", fontWeight: 600, lineHeight: 1.4, fontFamily: "'Inter',sans-serif", letterSpacing: "-0.2px" },
   ideaMeta: { fontSize: 12, color: "#6B7A90", marginTop: 4, lineHeight: 1.5, fontFamily: "'Inter',sans-serif" },
   tag: { fontSize: 11, background: "#F0EBE3", color: "#1B2B4B", borderRadius: 8, padding: "3px 8px", fontWeight: 500 },
