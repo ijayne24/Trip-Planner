@@ -2318,3 +2318,4 @@ const styles = {
   mnavBtn: { flex: 1, padding: "10px 4px", border: "none", background: "none", color: "#C9B8A8", fontSize: 10, fontFamily: "'Inter',sans-serif", fontWeight: 500, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, transition: "color .2s" },
   mnavActive: { color: "#1B2B4B" },
 };
+
