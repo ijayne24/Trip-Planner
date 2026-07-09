@@ -547,6 +547,7 @@ function TripMarketplace({ onLoadTrip, onClose }) {
 function TripDashboard({ onSelect, onNew, onSample }) {
   const [trips, setTrips] = React.useState([]);
   const [loaded, setLoaded] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(null); // trip to delete
 
   React.useEffect(() => {
     try {
@@ -609,17 +610,29 @@ function TripDashboard({ onSelect, onNew, onSample }) {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button onClick={e => {
-                  e.stopPropagation();
-                  if (window.confirm('Delete ' + trip.name + '? This cannot be undone.')) {
-                    try {
-                      localStorage.removeItem('trip-' + trip.id);
-                      const raw = localStorage.getItem(TRIPS_INDEX_KEY);
-                      if (raw) localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(JSON.parse(raw).filter(t => t.id !== trip.id)));
-                      setTrips(t => t.filter(t2 => t2.id !== trip.id));
-                    } catch {}
-                  }
-                }} style={{ background: 'none', border: 'none', color: '#C9B8A8', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}>🗑</button>
+                {confirmDelete?.id === trip.id ? (
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <button onClick={e => {
+                      e.stopPropagation();
+                      try {
+                        // Remove all copies of this trip from localStorage
+                        const keysToRemove = [];
+                        for (let i = 0; i < localStorage.length; i++) {
+                          const k = localStorage.key(i);
+                          try { const v = JSON.parse(localStorage.getItem(k)); if (v?.trip?.name === trip.name || k === 'trip-' + trip.id) keysToRemove.push(k); } catch {}
+                        }
+                        keysToRemove.forEach(k => localStorage.removeItem(k));
+                        const raw = localStorage.getItem(TRIPS_INDEX_KEY);
+                        if (raw) localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(JSON.parse(raw).filter(t => t.id !== trip.id)));
+                        setTrips(t => t.filter(t2 => t2.id !== trip.id));
+                        setConfirmDelete(null);
+                      } catch {}
+                    }} style={{ background: '#C85A2A', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 11, padding: '4px 8px', borderRadius: 8, fontFamily: "'Inter',sans-serif", fontWeight: 600 }}>Delete</button>
+                    <button onClick={e => { e.stopPropagation(); setConfirmDelete(null); }} style={{ background: '#F0EBE3', border: 'none', color: '#1B2B4B', cursor: 'pointer', fontSize: 11, padding: '4px 8px', borderRadius: 8, fontFamily: "'Inter',sans-serif" }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={e => { e.stopPropagation(); setConfirmDelete(trip); }} style={{ background: 'none', border: 'none', color: '#C9B8A8', cursor: 'pointer', fontSize: 16, padding: '4px 8px' }}>🗑</button>
+                )}
                 <div style={{ fontSize: 22, color: "#C9B8A8", fontWeight: 300 }}>›</div>
               </div>
             </div>
@@ -1540,29 +1553,55 @@ export default function TripPlanner() {
     try { localStorage.setItem("flok-returning-user", "1"); } catch {}
   }, []);
 
-  // Storage
+  // Storage — load last trip and migrate all trips to per-trip keys
   useEffect(() => {
     async function load() {
       try {
+        // Step 1: scan ALL localStorage keys and rebuild the index with full data
+        const index = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+          try {
+            const val = JSON.parse(localStorage.getItem(key));
+            if (val?.trip?.name && val?.trip?.start) {
+              // Ensure trip has an ID
+              if (!val.trip.id) val.trip.id = 'trip-' + Date.now() + '-' + i;
+              // Save under per-trip key if not already
+              const tripKey = 'trip-' + val.trip.id;
+              if (key !== tripKey) localStorage.setItem(tripKey, JSON.stringify(val));
+              // Add to index with full data
+              if (!index.find(e => e.id === val.trip.id)) {
+                index.push({
+                  id: val.trip.id,
+                  name: val.trip.name,
+                  start: val.trip.start,
+                  end: val.trip.end,
+                  travellers: val.trip.travellers || [],
+                  ideaCount: (val.ideas || []).filter(x => x.date).length,
+                  tripData: val.trip,
+                  ideasData: val.ideas || [],
+                });
+              }
+            }
+          } catch {}
+        }
+        if (index.length > 0) {
+          localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(index));
+        }
+
+        // Step 2: load last-opened trip from STORAGE_KEY
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const s = JSON.parse(raw);
           if (s.trip) {
-            // Migrate: assign ID if missing, save under per-trip key
-            const migratedTrip = s.trip.id ? s.trip : { ...s.trip, id: 'trip-' + Date.now() };
-            if (!s.trip.id) {
-              try {
-                localStorage.setItem('trip-' + migratedTrip.id, JSON.stringify({ trip: migratedTrip, ideas: s.ideas || [] }));
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ trip: migratedTrip, ideas: s.ideas || [] }));
-              } catch {}
-            }
-            setTrip(migratedTrip);
-            setCurrentTripId(migratedTrip.id);
-            setActiveDay(migratedTrip.dates?.[0] || null);
-            setSavedSnapshot({ ...s, trip: migratedTrip });
-            // Always start on dashboard — don't auto-open into a trip
+            if (!s.trip.id) s.trip.id = 'trip-' + Date.now();
+            setTrip(s.trip);
+            setCurrentTripId(s.trip.id);
+            setActiveDay(s.trip.dates?.[0] || null);
+            setSavedSnapshot(s);
           }
-          if (s.ideas) setIdeas(s.ideas);
+          if (s.ideas) setIdeas(s.ideas || []);
         }
       } catch {}
       setLoaded(true);
