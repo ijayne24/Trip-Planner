@@ -20,6 +20,14 @@ const CAT = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 
 const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+// Detect which map app a URL leads to
+function mapLabel(url) {
+  if (!url) return null;
+  if (url.includes("amap.com") || url.includes("gaode.com") || url.includes("amapurl.amap.com")) return { label: "AMap", icon: "📍", color: "#00B4FF" };
+  if (url.includes("maps.apple.com")) return { label: "Apple Maps", icon: "🗺", color: "#34C759" };
+  return { label: "Map", icon: "🗺", color: "#C85A2A" };
+}
+
 function dateRange(start, end) {
   const days = [];
   const s = new Date(start), e = new Date(end);
@@ -79,7 +87,7 @@ function isUrl(str) {
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea || {
     title: "", category: "activity", date: "", checkOut: "", time: "",
-    cost: "", currency: "SGD", place: "", mapsUrl: "", notes: "",
+    cost: "", currency: "SGD", place: "", mapsUrl: "", infoUrl: "", notes: "",
     paidBy: "", splitBetween: [], bookedStatus: "not-booked",
     // Flight-specific
     flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
@@ -281,24 +289,29 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
           </div>
 
           {/* Place + Maps */}
-          <div style={styles.formFull}>
-            <label style={styles.label}>Place / Address</label>
-            <input style={styles.input} placeholder="e.g. 1 Michelin Star, French Concession"
-              value={form.place} onChange={e => set("place", e.target.value)} />
-          </div>
-          <div style={styles.formFull}>
-            <label style={styles.label}>Google Maps / Booking URL</label>
-            <input style={{ ...styles.input, ...(form.mapsUrl ? { borderColor: "#10b981" } : {}) }}
-              placeholder="https://maps.google.com/…  (or paste above)"
-              value={form.mapsUrl}
-              onChange={e => set("mapsUrl", e.target.value)}
-              onPaste={e => {
-                const pasted = e.clipboardData.getData("text").trim();
-                if (isUrl(pasted) && !form.title) {
-                  const extracted = parseGoogleMapsUrl(pasted);
-                  if (extracted) setForm(f => ({ ...f, title: extracted }));
-                }
-              }} />
+          {/* Maps + More Info side by side */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <label style={styles.label}>Google Maps / AMap link</label>
+              <input style={{ ...styles.input, marginTop: 6, ...(form.mapsUrl ? { borderColor: "#10b981" } : {}) }}
+                placeholder="Paste Google Maps or AMap (高德) link…"
+                value={form.mapsUrl}
+                onChange={e => set("mapsUrl", e.target.value)}
+                onPaste={e => {
+                  const pasted = e.clipboardData.getData("text").trim();
+                  if (isUrl(pasted) && !form.title) {
+                    const extracted = parseGoogleMapsUrl(pasted);
+                    if (extracted) setForm(f => ({ ...f, title: extracted }));
+                  }
+                }} />
+            </div>
+            <div>
+              <label style={styles.label}>More Info link <span style={{ color: "#C9B8A8", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>— TikTok, article, booking page…</span></label>
+              <input style={{ ...styles.input, marginTop: 6, ...(form.infoUrl ? { borderColor: "#9B8EC4" } : {}) }}
+                placeholder="https://tiktok.com/... or booking link"
+                value={form.infoUrl || ""}
+                onChange={e => set("infoUrl", e.target.value)} />
+            </div>
           </div>
 
           {/* Notes */}
@@ -364,7 +377,8 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
             {idea.category !== "flight" && idea.time && <span style={styles.tag}>🕐 {idea.time}</span>}
             {idea.cost && <span style={styles.tag}>💰 {idea.cost} {idea.currency}{idea.splitBetween?.length > 0 ? ` ÷${idea.splitBetween.length}` : ""}</span>}
             {idea.paidBy && <span style={styles.tag}>👤 {idea.paidBy}</span>}
-            {idea.mapsUrl && <a href={idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag} onClick={e => e.stopPropagation()}>🗺 Map</a>}
+            {idea.mapsUrl && (() => { const ml = mapLabel(idea.mapsUrl); return <a href={idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.mapsTag, background: ml.color + "18", color: ml.color }} onClick={e => e.stopPropagation()}>{ml.icon} {ml.label}</a>; })()}
+            {idea.infoUrl && <a href={idea.infoUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.mapsTag, background: "#9B8EC422", color: "#9B8EC4" }} onClick={e => e.stopPropagation()}>🔗 More</a>}
           </div>
         </div>
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
@@ -377,8 +391,124 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
 }
 
 
+
+// ─── Sample trips data ────────────────────────────────────────────────────────
+const SAMPLE_TRIPS = [
+  {
+    id: "sample-singapore-1day",
+    name: "One Day in Singapore",
+    emoji: "🦁",
+    description: "The perfect 24 hours — hawker food, Gardens by the Bay, and a rooftop sunset.",
+    tags: ["Free", "1 Day", "Solo or Couple"],
+    duration: "1 day",
+    price: 0,
+    color: "#C85A2A",
+    trip: { name: "One Day in Singapore", start: "", end: "", travellers: [], currency: "SGD", dates: [] },
+    ideas: [
+      { id: "s1-1", title: "Tian Tian Chicken Rice", category: "food", time: "08:00", place: "Maxwell Food Centre", mapsUrl: "https://maps.google.com/?q=Maxwell+Food+Centre+Singapore", notes: "Arrive early — queue gets long by 9am", cost: "5", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "s1-2", title: "Gardens by the Bay", category: "activity", time: "10:00", place: "18 Marina Gardens Dr, Singapore", mapsUrl: "https://maps.google.com/?q=Gardens+by+the+Bay+Singapore", notes: "Free outdoor gardens. Cloud Forest & Flower Dome cost extra", cost: "0", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "s1-3", title: "Satay by the Bay", category: "food", time: "13:00", place: "18 Marina Gardens Dr, Singapore", mapsUrl: "https://maps.google.com/?q=Satay+by+the+Bay+Singapore", notes: "Alfresco hawker by the water. Try the stingray!", cost: "20", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "s1-4", title: "Chinatown Heritage Walk", category: "monument", time: "15:00", place: "Chinatown, Singapore", mapsUrl: "https://maps.google.com/?q=Chinatown+Singapore", notes: "Sri Mariamman Temple → Buddha Tooth Relic Temple", cost: "0", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "s1-5", title: "Lau Pa Sat Satay Street", category: "food", time: "18:30", place: "18 Raffles Quay, Singapore", mapsUrl: "https://maps.google.com/?q=Lau+Pa+Sat+Singapore", notes: "Iconic Victorian hawker centre. Satay street opens at 7pm", cost: "25", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "s1-6", title: "Marina Bay Sands Skypark", category: "monument", time: "20:00", place: "10 Bayfront Ave, Singapore", mapsUrl: "https://maps.google.com/?q=Marina+Bay+Sands+Singapore", notes: "Observation deck $32. Or watch the light show from the waterfront for free at 8pm and 9pm", cost: "32", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+    ]
+  },
+];
+
+// ─── TripMarketplace ──────────────────────────────────────────────────────────
+function TripMarketplace({ onLoadTrip, onClose }) {
+  const [selected, setSelected] = React.useState(null);
+
+  const handleLoad = (sample) => {
+    // Create a new trip from the sample, stripping dates so user sets their own
+    const newTrip = {
+      ...sample.trip,
+      id: uid(),
+      dates: [],
+    };
+    const newIdeas = sample.ideas.map(i => ({ ...i, id: uid(), date: "", time: i.time || "" }));
+    onLoadTrip(newTrip, newIdeas);
+  };
+
+  return (
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={{ ...styles.modal, maxWidth: 520, maxHeight: "88vh" }} onClick={e => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <span style={{ fontSize: 22 }}>🦩</span>
+          <span style={styles.modalTitle}>Sample Trips</span>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: "12px 16px 6px", background: "#FAF7F2", borderBottom: "1px solid #EDE8E1", flexShrink: 0 }}>
+          <p style={{ fontSize: 13, color: "#6B7A90", fontFamily: "'Inter',sans-serif", lineHeight: 1.5 }}>
+            Load a sample trip as a starting point — all ideas go into your pool with no dates, ready for you to schedule.
+          </p>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10, background: "#FAF7F2" }}>
+          {SAMPLE_TRIPS.map(sample => (
+            <div key={sample.id}
+              style={{ background: "#fff", border: `1.5px solid ${selected?.id === sample.id ? sample.color : "#EDE8E1"}`, borderRadius: 16, padding: "14px 16px", cursor: "pointer", transition: "all .15s", boxShadow: selected?.id === sample.id ? `0 0 0 3px ${sample.color}22` : "0 1px 4px rgba(27,43,75,0.06)" }}
+              onClick={() => setSelected(selected?.id === sample.id ? null : sample)}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: sample.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                  {sample.emoji}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 15, color: "#1B2B4B", marginBottom: 3 }}>{sample.name}</div>
+                    <button style={{ background: "#F0EBE3", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, color: "#C85A2A", fontWeight: 700, cursor: "pointer", flexShrink: 0, fontFamily: "'Inter',sans-serif" }}
+                      onClick={e => { e.stopPropagation(); exportSampleHTML(sample); }}>
+                      ⬇ HTML
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6B7A90", lineHeight: 1.5, marginBottom: 8 }}>{sample.description}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {sample.tags.map(t => (
+                      <span key={t} style={{ fontSize: 11, background: "#F0EBE3", color: "#1B2B4B", borderRadius: 100, padding: "2px 10px", fontWeight: 500 }}>{t}</span>
+                    ))}
+                    <span style={{ fontSize: 11, background: "#F0EBE3", color: "#6B7A90", borderRadius: 100, padding: "2px 10px" }}>{sample.ideas.length} stops</span>
+                  </div>
+                </div>
+              </div>
+              {selected?.id === sample.id && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #EDE8E1" }}>
+                  <div style={{ fontSize: 12, color: "#6B7A90", marginBottom: 8, fontFamily: "'Inter',sans-serif" }}>Included stops:</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {sample.ideas.slice(0, 4).map(i => {
+                      const cat = CAT[i.category] || CAT.misc;
+                      return (
+                        <div key={i.id} style={{ fontSize: 12, color: "#1B2B4B", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>{cat.icon}</span> {i.title}
+                          {i.time && <span style={{ color: "#6B7A90", fontSize: 11 }}>· {i.time}</span>}
+                        </div>
+                      );
+                    })}
+                    {sample.ideas.length > 4 && <div style={{ fontSize: 11, color: "#C9B8A8" }}>+{sample.ideas.length - 4} more stops…</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ ...styles.modalFooter, flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, width: "100%" }}>
+            <button style={{ ...styles.btnSecondary, flex: 1, opacity: selected ? 1 : 0.4, pointerEvents: selected ? "auto" : "none", fontSize: 13, padding: "11px 12px" }}
+              onClick={() => selected && exportSampleHTML(selected)}>
+              ⬇ Download itinerary
+            </button>
+            <button style={{ ...styles.btnPrimary, flex: 1, opacity: selected ? 1 : 0.4, pointerEvents: selected ? "auto" : "none", fontSize: 13, padding: "11px 12px" }}
+              onClick={() => selected && handleLoad(selected)}>
+              Load into my Flok →
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: "#C9B8A8", textAlign: "center", fontFamily: "'Inter',sans-serif" }}>More curated trips coming soon 🦩</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TripDashboard ────────────────────────────────────────────────────────────
-function TripDashboard({ onSelect, onNew }) {
+function TripDashboard({ onSelect, onNew, onSample }) {
   const [trips, setTrips] = React.useState([]);
   const [loaded, setLoaded] = React.useState(false);
 
@@ -450,6 +580,7 @@ function TripDashboard({ onSelect, onNew }) {
 
       <div style={dashStyles.footer}>
         <button style={dashStyles.newBtn} onClick={onNew}>＋ Plan a New Trip</button>
+        <button style={dashStyles.sampleBtn} onClick={onSample}>🦩 Browse Sample Trips</button>
       </div>
     </div>
   );
@@ -470,7 +601,8 @@ const dashStyles = {
   tripMeta: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#6B7A90", marginBottom: 6 },
   tripStats: { display: "flex", gap: 12 },
   tripStat: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#C9B8A8", background: "#FAF7F2", padding: "2px 8px", borderRadius: 10 },
-  footer: { padding: "16px", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" },
+  footer: { padding: "16px", paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", gap: 10 },
+  sampleBtn: { width: "100%", padding: "14px", background: "#FAF7F2", color: "#1B2B4B", border: "1.5px solid #EDE8E1", borderRadius: 18, fontFamily: "'Inter',sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   newBtn: { width: "100%", padding: "18px", background: "#C85A2A", color: "#fff", border: "none", borderRadius: 18, fontFamily: "'Inter',sans-serif", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(232,103,42,0.3)" },
 };
 
@@ -645,6 +777,104 @@ function BudgetSheet({ ideas, travellers, currency }) {
 }
 
 // ─── Export story as downloadable HTML → print to PDF ────────────────────────
+// ─── Export a sample trip as standalone HTML ──────────────────────────────────
+function exportSampleHTML(sample) {
+  const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+
+  const stopCards = sample.ideas.map((item, i) => {
+    const cat = catMap[item.category] || catMap.misc;
+    return `
+      <div class="stop-row">
+        <div class="stop-spine">
+          <div class="stop-dot" style="background:${cat.color}">${i + 1}</div>
+          ${i < sample.ideas.length - 1 ? '<div class="stop-line"></div>' : ''}
+        </div>
+        <div class="stop-body${i < sample.ideas.length - 1 ? ' stop-body-mb' : ''}">
+          <div class="stop-title">${cat.icon} ${item.title}</div>
+          ${item.place ? `<div class="stop-place">📍 ${item.place}</div>` : ''}
+          ${item.notes ? `<div class="stop-notes">${item.notes}</div>` : ''}
+          <div class="stop-chips">
+            ${item.time ? `<span class="chip">🕐 ${item.time}</span>` : ''}
+            ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ''}
+            ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn" target="_blank">🗺 Map</a>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${sample.name} — Flok</title>
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0 32px;}
+.cover{width:100%;background:linear-gradient(160deg,#111D33 0%,#1B2B4B 40%,${sample.color} 100%);padding:52px 24px 44px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:12px;}
+.cover-emoji{width:72px;height:72px;border-radius:18px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:4px;}
+.cover-title{font-family:'Pacifico',cursive;font-size:30px;color:#F5E882;line-height:1.3;}
+.cover-desc{font-size:15px;color:rgba(255,255,255,0.75);line-height:1.6;max-width:340px;}
+.cover-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px;}
+.tag-pill{font-size:12px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:100px;padding:5px 14px;font-weight:500;}
+.card{background:#fff;border-radius:20px;overflow:hidden;margin:0 12px 12px;box-shadow:0 2px 16px rgba(27,43,75,0.08);}
+.card-header{padding:16px 20px 12px;background:#1B2B4B;display:flex;align-items:baseline;gap:8px;}
+.card-label{font-family:'Pacifico',cursive;font-size:20px;color:#F5E882;}
+.stops{padding:16px 20px;display:flex;flex-direction:column;}
+.stop-row{display:flex;gap:14px;}
+.stop-spine{display:flex;flex-direction:column;align-items:center;width:32px;flex-shrink:0;}
+.stop-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.stop-line{width:2px;flex:1;background:#EDE8E1;min-height:16px;margin-top:3px;}
+.stop-body{flex:1;}
+.stop-body-mb{padding-bottom:16px;}
+.stop-title{font-size:15px;color:#1B2B4B;font-weight:600;line-height:1.4;}
+.stop-place{font-size:13px;color:#6B7A90;margin-top:4px;}
+.stop-notes{font-size:13px;color:#9BA8B5;margin-top:4px;font-style:italic;line-height:1.5;}
+.stop-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}
+.chip{font-size:12px;background:#F0EBE3;color:#1B2B4B;border-radius:8px;padding:4px 10px;border:1px solid #EDE8E1;}
+.chip-cost{color:#C85A2A;background:#FFF5F0;border-color:#FFD0B5;}
+.map-btn{font-size:12px;background:#C85A2A;color:#fff;border:none;border-radius:10px;padding:6px 14px;text-decoration:none;font-weight:600;display:inline-block;}
+.flok-banner{margin:24px 12px 0;background:linear-gradient(135deg,#1B2B4B 0%,#C85A2A 100%);border-radius:20px;padding:32px 24px;text-align:center;}
+.flok-banner h2{font-family:'Pacifico',cursive;font-size:22px;color:#F5E882;margin:10px 0 8px;}
+.flok-banner p{font-size:14px;color:rgba(255,255,255,0.75);line-height:1.6;margin-bottom:20px;}
+.flok-btn{display:inline-block;background:#F5E882;color:#1B2B4B;font-weight:800;font-size:15px;padding:14px 32px;border-radius:100px;text-decoration:none;}
+.flok-url{font-size:11px;color:rgba(255,255,255,0.35);margin-top:14px;letter-spacing:0.5px;}
+</style></head>
+<body>
+<div class="cover">
+  <div class="cover-emoji">${sample.emoji}</div>
+  <div class="cover-title">${sample.name}</div>
+  <div class="cover-desc">${sample.description}</div>
+  <div class="cover-tags">
+    ${sample.tags.map(t => `<span class="tag-pill">${t}</span>`).join("")}
+    <span class="tag-pill">${sample.ideas.length} stops</span>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header">
+    <div class="card-label">All Stops</div>
+  </div>
+  <div class="stops">${stopCards}</div>
+</div>
+<div class="flok-banner">
+  <div style="font-size:36px">🦩</div>
+  <h2>Made with Flok</h2>
+  <p>Plan your next trip with your whole crew.<br/>Free to use · No download needed · Works on any device.</p>
+  <a href="https://trip-planner-nine-gray.vercel.app" class="flok-btn">🦩 Plan your own trip on Flok →</a>
+  <div class="flok-url">trip-planner-nine-gray.vercel.app</div>
+</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${sample.name.replace(/[^a-z0-9]/gi,"_")}_by_Flok.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function exportStoryHTML(trip, ideas) {
   const scheduled = {};
   ideas.filter(i => i.date && i.category !== "accommodation").forEach(i => {
@@ -790,6 +1020,21 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 
 ${coverHtml}
 ${dayCards}
+
+<!-- Made with Flok footer -->
+<div style="margin:24px 12px 0;background:linear-gradient(135deg,#1B2B4B 0%,#C85A2A 100%);border-radius:20px;padding:32px 24px;text-align:center;">
+  <div style="font-size:36px;margin-bottom:10px">🦩</div>
+  <div style="font-family:'Pacifico',cursive;font-size:24px;color:#F5E882;margin-bottom:8px">Made with Flok</div>
+  <div style="font-size:14px;color:rgba(255,255,255,0.75);margin-bottom:20px;line-height:1.7;font-family:'Inter',sans-serif;">
+    Plan your next trip with your whole crew.<br/>
+    Free to use · No download needed · Works on any device.
+  </div>
+  <a href="https://trip-planner-nine-gray.vercel.app"
+    style="display:inline-block;background:#F5E882;color:#1B2B4B;font-family:'Inter',sans-serif;font-weight:800;font-size:15px;padding:14px 32px;border-radius:100px;text-decoration:none;letter-spacing:-0.3px;">
+    🦩 Plan your own trip on Flok →
+  </a>
+  <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:16px;font-family:'Inter',sans-serif;letter-spacing:0.5px;">trip-planner-nine-gray.vercel.app</div>
+</div>
 </body></html>`;
 
   const blob = new Blob([html], { type: "text/html" });
@@ -1209,6 +1454,7 @@ export default function TripPlanner() {
   const [storyMode, setStoryMode] = useState("cards"); // "cards" | "map"
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTraveller, setSettingsTraveller] = useState("");
+  const [showMarketplace, setShowMarketplace] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState(null); // last known saved state
   const ghostRef = useRef(null);
   const touchRef = useRef(null);
@@ -1224,6 +1470,18 @@ export default function TripPlanner() {
       document.head.appendChild(meta);
     }
     meta.content = "width=device-width, initial-scale=1, maximum-scale=1";
+  }, []);
+
+  // Show welcome message if arriving from a shared Flok itinerary
+  const [showWelcomeBanner, setShowWelcomeBanner] = useState(() => {
+    try {
+      const ref = document.referrer || "";
+      const isSharedLink = ref === "" && !localStorage.getItem("flok-returning-user");
+      return isSharedLink;
+    } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("flok-returning-user", "1"); } catch {}
   }, []);
 
   // Storage
@@ -1376,10 +1634,43 @@ export default function TripPlanner() {
     const ref = touchRef.current;
     if (ghostRef.current) { ghostRef.current.remove(); ghostRef.current = null; }
     if (ref?.moved && dragging && dragOver) {
-      if (dragOver === "pool") setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: "", time: "" } : i));
-      else setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: dragOver } : i));
+      if (dragOver === "pool") {
+        setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: "", time: "" } : i));
+      } else if (dragOver.startsWith("slot-")) {
+        // Reorder within day
+        const parts = dragOver.split("-"); // slot-YYYY-MM-DD-idx or slot-YYYY-MM-DD-end
+        const isEnd = dragOver.endsWith("-end");
+        const dayDate = parts.slice(1, isEnd ? -1 : -1).join("-");
+        const toIndex = isEnd
+          ? (scheduled[dayDate]?.length || 0)
+          : parseInt(parts[parts.length - 1]);
+        if (dragging.date === dayDate) {
+          reorderInDay(dragging.id, dayDate, toIndex);
+        } else {
+          setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: dayDate } : i));
+        }
+      } else {
+        setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: dragOver } : i));
+      }
     }
     setDragging(null); setDragOver(null); touchRef.current = null;
+  };
+
+  // Reorder within a day by moving idea to a specific index
+  const reorderInDay = (ideaId, dayDate, toIndex) => {
+    setIdeas(prev => {
+      const dayIdeas = prev.filter(i => i.date === dayDate && i.category !== "accommodation")
+        .sort((a,b) => (a.time||"99:99") > (b.time||"99:99") ? 1 : -1);
+      const others = prev.filter(i => i.date !== dayDate || i.category === "accommodation");
+      const fromIndex = dayIdeas.findIndex(i => i.id === ideaId);
+      if (fromIndex === -1 || fromIndex === toIndex) return prev;
+      const reordered = [...dayIdeas];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      // Assign synthetic times to preserve order (00:00, 00:01 etc as order markers)
+      // Actually just keep ideas in order — we track order by array position
+      return [...others, ...reordered];
+    });
   };
 
   const dragProps = (idea) => ({
@@ -1404,6 +1695,7 @@ export default function TripPlanner() {
 
   if (screen === "dashboard") return (
     <TripDashboard
+      onSample={() => setShowMarketplace(true)}
       onSelect={(id) => {
         // For now just load the current saved trip
         try {
@@ -1467,6 +1759,35 @@ export default function TripPlanner() {
           onCancel={() => { setShowForm(false); setEditIdea(null); }} />
       )}
 
+      {/* Welcome banner for new visitors */}
+      {showWelcomeBanner && screen === "dashboard" && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200, padding: "0 16px 24px" }}>
+          <div style={{ background: "linear-gradient(135deg,#1B2B4B,#C85A2A)", borderRadius: 20, padding: "20px 20px 16px", boxShadow: "0 -8px 40px rgba(27,43,75,0.3)" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <span style={{ fontSize: 32, flexShrink: 0 }}>🦩</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Inter',sans-serif", fontWeight: 800, fontSize: 16, color: "#F5E882", marginBottom: 4 }}>
+                  Welcome to Flok!
+                </div>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", lineHeight: 1.5, marginBottom: 12 }}>
+                  Someone shared a trip with you. Plan your own — free, no account needed.
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={{ ...styles.btnPrimary, background: "#F5E882", color: "#1B2B4B", fontSize: 13, padding: "10px 18px" }}
+                    onClick={() => { setShowWelcomeBanner(false); }}>
+                    Start planning →
+                  </button>
+                  <button style={{ background: "rgba(255,255,255,0.15)", color: "white", border: "none", borderRadius: 12, padding: "10px 14px", fontSize: 13, cursor: "pointer" }}
+                    onClick={() => setShowWelcomeBanner(false)}>
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirm new trip modal */}
       {confirmNew && (
         <div style={styles.overlay} onClick={() => setConfirmNew(false)}>
@@ -1491,6 +1812,20 @@ export default function TripPlanner() {
         </div>
       )}
 
+      {/* Sample Trips Marketplace */}
+      {showMarketplace && (
+        <TripMarketplace
+          onClose={() => setShowMarketplace(false)}
+          onLoadTrip={(newTrip, newIdeas) => {
+            setTrip(newTrip);
+            setIdeas(newIdeas);
+            setActiveDay(null);
+            setScreen("setup");
+            setShowMarketplace(false);
+          }}
+        />
+      )}
+
       {/* Trip settings modal — add/remove travellers anytime */}
       {showSettings && trip && (
         <div style={styles.overlay} onClick={() => setShowSettings(false)}>
@@ -1506,6 +1841,44 @@ export default function TripPlanner() {
                 <input style={styles.input} value={trip.name}
                   onChange={e => setTrip(t => ({ ...t, name: e.target.value }))} />
               </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Start date</label>
+                  <input style={{ ...styles.input, marginTop: 6 }} type="date" value={trip.start}
+                    onChange={e => {
+                      const newStart = e.target.value;
+                      if (newStart && trip.end && newStart <= trip.end) {
+                        const newDates = dateRange(newStart, trip.end);
+                        setTrip(t => ({ ...t, start: newStart, dates: newDates }));
+                      } else {
+                        setTrip(t => ({ ...t, start: newStart }));
+                      }
+                    }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>End date</label>
+                  <input style={{ ...styles.input, marginTop: 6 }} type="date" value={trip.end}
+                    onChange={e => {
+                      const newEnd = e.target.value;
+                      if (trip.start && newEnd && trip.start <= newEnd) {
+                        const newDates = dateRange(trip.start, newEnd);
+                        setTrip(t => ({ ...t, end: newEnd, dates: newDates }));
+                      } else {
+                        setTrip(t => ({ ...t, end: newEnd }));
+                      }
+                    }} />
+                </div>
+              </div>
+              {trip.start && trip.end && trip.start <= trip.end && (
+                <div style={{ fontSize: 12, color: "#6B7A90", fontFamily: "'Inter',sans-serif", marginTop: -8 }}>
+                  {dateRange(trip.start, trip.end).length} days · {fmtDate(trip.start)} – {fmtDate(trip.end)}
+                  {ideas.filter(i => i.date && !dateRange(trip.start, trip.end).includes(i.date)).length > 0 && (
+                    <span style={{ color: "#C85A2A", marginLeft: 8 }}>
+                      ⚠ {ideas.filter(i => i.date && !dateRange(trip.start, trip.end).includes(i.date)).length} ideas fall outside new dates
+                    </span>
+                  )}
+                </div>
+              )}
               <div>
                 <label style={styles.label}>Who's coming?</label>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -1644,7 +2017,6 @@ export default function TripPlanner() {
                           <div style={{ fontWeight: 600, fontSize: 13, color: "#1B2B4B", fontFamily: "'Inter',sans-serif" }}>{stay.title}</div>
                           <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontFamily: "'Inter',sans-serif" }}>
                             {fmtDate(stay.date)}{stay.checkOut && stay.checkOut !== stay.date ? ` → ${fmtDate(stay.checkOut)}` : ""}
-                            {stay.place ? ` · ${stay.place}` : ""}
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -1655,20 +2027,89 @@ export default function TripPlanner() {
                       </div>
                     </div>
                   ))}
-                  {activeDay && (scheduled[activeDay] || []).map((idea, idx) => (
-                    <div key={idea.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      <div style={styles.tlLine}>
-                        <div style={{ ...styles.tlDot, background: CAT[idea.category]?.color || "#555" }} />
-                        {idx < (scheduled[activeDay].length - 1) && <div style={styles.tlConnector} />}
-                      </div>
-                      <div style={{ flex: 1, marginBottom: 8 }}>
-                        <IdeaCard idea={idea} compact
-                          onEdit={i => setEditIdea(i)}
-                          onDelete={deleteIdea}
-                          {...dragProps(idea)} />
-                      </div>
-                    </div>
-                  ))}
+
+                  {/* Timeline with drop slots for reordering */}
+                  {activeDay && (scheduled[activeDay] || []).length > 0 && (
+                    <>
+                      {(scheduled[activeDay] || []).map((idea, idx) => {
+                        const dropSlotId = `slot-${activeDay}-${idx}`;
+                        const isOverSlot = dragOver === dropSlotId;
+                        return (
+                          <div key={idea.id}>
+                            {/* Drop slot BEFORE each item */}
+                            <div
+                              data-dropzone={dropSlotId}
+                              onDragOver={e => { e.preventDefault(); setDragOver(dropSlotId); }}
+                              onDragLeave={() => setDragOver(null)}
+                              onDrop={e => {
+                                e.preventDefault();
+                                if (dragging && dragging.date === activeDay) {
+                                  reorderInDay(dragging.id, activeDay, idx);
+                                } else if (dragging) {
+                                  setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: activeDay } : i));
+                                }
+                                setDragging(null); setDragOver(null);
+                              }}
+                              style={{
+                                height: isOverSlot ? 44 : 6,
+                                margin: "2px 0",
+                                borderRadius: 8,
+                                background: isOverSlot ? "#C85A2A18" : "transparent",
+                                border: isOverSlot ? "2px dashed #C85A2A" : "2px solid transparent",
+                                transition: "all .15s",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}>
+                              {isOverSlot && <span style={{ fontSize: 11, color: "#C85A2A", fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>Drop here</span>}
+                            </div>
+                            {/* The card itself */}
+                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                              <div style={styles.tlLine}>
+                                <div style={{ ...styles.tlDot, background: CAT[idea.category]?.color || "#555" }} />
+                                {idx < (scheduled[activeDay].length - 1) && <div style={styles.tlConnector} />}
+                              </div>
+                              <div style={{ flex: 1, marginBottom: 4 }}>
+                                <IdeaCard idea={idea} compact
+                                  onEdit={i => setEditIdea(i)}
+                                  onDelete={deleteIdea}
+                                  {...dragProps(idea)} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {/* Drop slot at END */}
+                      {(() => {
+                        const endSlotId = `slot-${activeDay}-end`;
+                        const isOverEnd = dragOver === endSlotId;
+                        return (
+                          <div
+                            data-dropzone={endSlotId}
+                            onDragOver={e => { e.preventDefault(); setDragOver(endSlotId); }}
+                            onDragLeave={() => setDragOver(null)}
+                            onDrop={e => {
+                              e.preventDefault();
+                              if (dragging && dragging.date === activeDay) {
+                                reorderInDay(dragging.id, activeDay, (scheduled[activeDay] || []).length);
+                              } else if (dragging) {
+                                setIdeas(prev => prev.map(i => i.id === dragging.id ? { ...i, date: activeDay } : i));
+                              }
+                              setDragging(null); setDragOver(null);
+                            }}
+                            style={{
+                              height: isOverEnd ? 44 : 12,
+                              borderRadius: 8,
+                              background: isOverEnd ? "#C85A2A18" : "transparent",
+                              border: isOverEnd ? "2px dashed #C85A2A" : "2px solid transparent",
+                              transition: "all .15s",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}>
+                            {isOverEnd && <span style={{ fontSize: 11, color: "#C85A2A", fontWeight: 600 }}>Drop here</span>}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+
                   {(!activeDay || (!scheduled[activeDay]?.length && !staysOnDay[activeDay]?.length)) && (
                     <div style={styles.dropHint}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>🗓</div>
