@@ -564,24 +564,37 @@ function TripDashboard({ onSelect, onNew, onSample }) {
       {/* Coastal illustrated hero — cobalt blue with SVG shapes */}
       <div style={dashStyles.hero}>
         {/* Decorative SVG shapes */}
-        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 390 320" preserveAspectRatio="xMidYMid slice">
-          {/* Sun */}
-          <circle cx="320" cy="60" r="55" fill="#F5E882" opacity="0.9"/>
-          {/* Cloud shapes */}
-          <ellipse cx="60" cy="40" rx="45" ry="28" fill="white" opacity="0.15"/>
-          <ellipse cx="95" cy="30" rx="35" ry="22" fill="white" opacity="0.15"/>
+        <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%" }} viewBox="0 0 1440 320" preserveAspectRatio="xMidYMid slice">
+          {/* Moon */}
+          <circle cx="1300" cy="70" r="60" fill="#F5E882" opacity="0.9"/>
+          <circle cx="1330" cy="55" r="50" fill="#1B2B4B" opacity="1"/>
+          {/* Stars scattered across sky */}
+          <circle cx="200" cy="40" r="2" fill="white" opacity="0.8"/>
+          <circle cx="450" cy="25" r="1.5" fill="white" opacity="0.6"/>
+          <circle cx="700" cy="55" r="2.5" fill="white" opacity="0.7"/>
+          <circle cx="900" cy="20" r="1.5" fill="white" opacity="0.5"/>
+          <circle cx="1050" cy="45" r="2" fill="white" opacity="0.8"/>
+          <circle cx="550" cy="70" r="1" fill="white" opacity="0.5"/>
+          <circle cx="800" cy="35" r="1.5" fill="white" opacity="0.6"/>
+          <circle cx="1150" cy="30" r="1" fill="white" opacity="0.7"/>
+          <circle cx="350" cy="60" r="1" fill="white" opacity="0.4"/>
+          <circle cx="650" cy="15" r="2" fill="white" opacity="0.6"/>
+          {/* Star sparkles */}
+          <text x="620" y="55" fontSize="12" opacity="0.5" fill="white">✦</text>
+          <text x="980" y="65" fontSize="10" opacity="0.4" fill="white">✦</text>
+          <text x="280" y="45" fontSize="8" opacity="0.5" fill="white">✦</text>
+          {/* Clouds */}
+          <ellipse cx="100" cy="80" rx="60" ry="30" fill="white" opacity="0.08"/>
+          <ellipse cx="150" cy="65" rx="45" ry="25" fill="white" opacity="0.08"/>
+          <ellipse cx="600" cy="90" rx="70" ry="28" fill="white" opacity="0.06"/>
           {/* Wave 1 */}
-          <path d="M0 200 Q60 170 120 200 Q180 230 240 200 Q300 170 360 200 Q390 215 390 215 L390 320 L0 320 Z" fill="#C85A2A" opacity="0.85"/>
+          <path d="M0 200 Q180 165 360 200 Q540 235 720 200 Q900 165 1080 200 Q1260 235 1440 200 L1440 320 L0 320 Z" fill="#C85A2A" opacity="0.85"/>
           {/* Wave 2 */}
-          <path d="M0 230 Q80 205 160 230 Q240 255 320 230 Q360 218 390 228 L390 320 L0 320 Z" fill="#F0EBE3" opacity="0.6"/>
+          <path d="M0 230 Q240 205 480 230 Q720 255 960 230 Q1200 205 1440 230 L1440 320 L0 320 Z" fill="#F0EBE3" opacity="0.6"/>
           {/* Wave 3 */}
-          <path d="M0 260 Q100 240 200 260 Q300 280 390 255 L390 320 L0 320 Z" fill="#fff" opacity="0.9"/>
-          {/* Airplane */}
-          <text x="30" y="140" fontSize="36" opacity="0.9">✈️</text>
-          {/* Stars */}
-          <text x="200" y="50" fontSize="14" opacity="0.6">✦</text>
-          <text x="150" y="80" fontSize="10" opacity="0.4">✦</text>
-          <text x="260" y="90" fontSize="8" opacity="0.5">✦</text>
+          <path d="M0 262 Q360 245 720 262 Q1080 279 1440 258 L1440 320 L0 320 Z" fill="#fff" opacity="0.9"/>
+          {/* Airplane silhouette */}
+          <text x="480" y="130" fontSize="32" opacity="0.15">✈</text>
         </svg>
         <div style={dashStyles.heroContent}>
           <div style={{ fontFamily: "'Pacifico',cursive", fontSize: 42, color: "#F5E882", lineHeight: 1.1, marginBottom: 4 }}>Flokk 🦩</div>
@@ -650,8 +663,8 @@ function TripDashboard({ onSelect, onNew, onSample }) {
 
 const dashStyles = {
   screen: { minHeight: "100dvh", background: "#FAF7F2", display: "flex", flexDirection: "column" },
-  hero: { position: "relative", background: "#1B2B4B", height: 300, overflow: "hidden", flexShrink: 0 },
-  heroContent: { position: "relative", zIndex: 2, padding: "56px 28px 0", textAlign: "left" },
+  hero: { position: "relative", background: "#1B2B4B", height: 280, overflow: "hidden", flexShrink: 0 },
+  heroContent: { position: "relative", zIndex: 2, padding: "56px 28px 0", textAlign: "left", maxWidth: 500 },
   heroTitle: { fontFamily: "'Pacifico',cursive", fontSize: 36, color: "#F5E882", lineHeight: 1.2 },
   heroSub: { fontFamily: "'Inter',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.8)", marginTop: 6 },
   body: { flex: 1, padding: "20px 16px 8px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" },
@@ -1915,6 +1928,10 @@ export default function TripPlanner() {
         .mobile-nav{display:flex!important;}
         /* Top tab bar hidden -- bottom nav handles it */
         .tab-row-bar{display:none!important;}
+        @media(min-width:1024px){
+          .tab-row-bar{display:flex!important;}
+          .mobile-nav{display:none!important;}
+        }
         `}</style>
 
       {/* Forms */}
