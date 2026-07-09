@@ -85,11 +85,19 @@ function isUrl(str) {
 
 // ─── IdeaForm modal ───────────────────────────────────────────────────────────
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
-  const [form, setForm] = useState(idea || {
+  const [form, setForm] = useState(idea ? {
     title: "", category: "activity", date: "", checkOut: "", time: "",
     cost: "", currency: "SGD", place: "", mapsUrl: "", infoUrl: "", notes: "",
     paidBy: "", splitBetween: [], bookedStatus: "not-booked",
-    // Flight-specific
+    flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
+    ...idea,                    // spread existing idea values
+    infoUrl: idea.infoUrl || "", // ensure infoUrl is never undefined
+    mapsUrl: idea.mapsUrl || "",
+    splitBetween: idea.splitBetween || [],
+  } : {
+    title: "", category: "activity", date: "", checkOut: "", time: "",
+    cost: "", currency: "SGD", place: "", mapsUrl: "", infoUrl: "", notes: "",
+    paidBy: "", splitBetween: [], bookedStatus: "not-booked",
     flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
