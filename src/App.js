@@ -1535,10 +1535,18 @@ export default function TripPlanner() {
         if (raw) {
           const s = JSON.parse(raw);
           if (s.trip) {
-            setTrip(s.trip);
-            setCurrentTripId(s.trip.id || "default");
-            setActiveDay(s.trip.dates?.[0] || null);
-            setSavedSnapshot(s);
+            // Migrate: assign ID if missing, save under per-trip key
+            const migratedTrip = s.trip.id ? s.trip : { ...s.trip, id: 'trip-' + Date.now() };
+            if (!s.trip.id) {
+              try {
+                localStorage.setItem('trip-' + migratedTrip.id, JSON.stringify({ trip: migratedTrip, ideas: s.ideas || [] }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ trip: migratedTrip, ideas: s.ideas || [] }));
+              } catch {}
+            }
+            setTrip(migratedTrip);
+            setCurrentTripId(migratedTrip.id);
+            setActiveDay(migratedTrip.dates?.[0] || null);
+            setSavedSnapshot({ ...s, trip: migratedTrip });
             // Always start on dashboard — don't auto-open into a trip
           }
           if (s.ideas) setIdeas(s.ideas);
@@ -1755,16 +1763,34 @@ export default function TripPlanner() {
         onSample={() => setShowMarketplace(true)}
         onSelect={(id) => {
           try {
+            // 1. Try the dedicated per-trip key
             const tripKey = `trip-${id}`;
-            const raw = localStorage.getItem(tripKey) || localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-              const s = JSON.parse(raw);
-              if (s.trip && s.trip.id === id) {
+            const dedicated = localStorage.getItem(tripKey);
+            if (dedicated) {
+              const s = JSON.parse(dedicated);
+              setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null);
+              setScreen("app"); return;
+            }
+            // 2. Try the main STORAGE_KEY (last opened trip)
+            const main = localStorage.getItem(STORAGE_KEY);
+            if (main) {
+              const s = JSON.parse(main);
+              if (s.trip?.id === id) {
                 setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null);
-              } else {
-                const raw2 = localStorage.getItem(STORAGE_KEY);
-                if (raw2) { const s2 = JSON.parse(raw2); if (s2.trip) { setTrip(s2.trip); setIdeas(s2.ideas || []); setActiveDay(s2.trip.dates?.[0] || null); } }
+                setScreen("app"); return;
               }
+            }
+            // 3. Search all localStorage keys for this trip id
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (!key) continue;
+              try {
+                const val = JSON.parse(localStorage.getItem(key));
+                if (val?.trip?.id === id) {
+                  setTrip(val.trip); setIdeas(val.ideas || []); setActiveDay(val.trip.dates?.[0] || null);
+                  setScreen("app"); return;
+                }
+              } catch {}
             }
           } catch {}
           setScreen("app");
