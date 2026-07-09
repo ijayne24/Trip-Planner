@@ -1588,7 +1588,7 @@ export default function TripPlanner() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, []);
 
-  const saveToIndex = (t, i) => {
+  const saveToIndex = (t, i) => {   try {     const raw = localStorage.getItem(TRIPS_INDEX_KEY);     const index = raw ? JSON.parse(raw) : [];     const entry = {       id: t.id || "default",       name: t.name, start: t.start, end: t.end,       travellers: t.travellers,       ideaCount: i.filter(x => x.date).length,       tripData: t,       ideasData: i,     };     const exists = index.findIndex(x => x.id === entry.id);     if (exists > -1) index[exists] = entry;     else index.unshift(entry);     localStorage.setItem(TRIPS_INDEX_KEY, JSON.stringify(index));   } catch {} };
     try {
       const raw = localStorage.getItem(TRIPS_INDEX_KEY);
       const index = raw ? JSON.parse(raw) : [];
@@ -1761,7 +1761,7 @@ export default function TripPlanner() {
     <>
       <TripDashboard
         onSample={() => setShowMarketplace(true)}
-        onSelect={(id) => {
+        onSelect={(id) => {   try {     const indexRaw = localStorage.getItem(TRIPS_INDEX_KEY);     if (indexRaw) {       const index = JSON.parse(indexRaw);       const entry = index.find(x => x.id === id);       if (entry?.tripData) {         setTrip(entry.tripData);         setIdeas(entry.ideasData || []);         setActiveDay(entry.tripData.dates?.[0] || null);         setScreen("app"); return;       }     }     const main = localStorage.getItem(STORAGE_KEY);     if (main) {       const s = JSON.parse(main);       if (s.trip) { setTrip(s.trip); setIdeas(s.ideas || []); setActiveDay(s.trip.dates?.[0] || null); }     }   } catch {}   setScreen("app"); }}
           try {
             // 1. Try the dedicated per-trip key
             const tripKey = `trip-${id}`;
