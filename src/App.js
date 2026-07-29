@@ -461,6 +461,27 @@ const SAMPLE_TRIPS = [
       { id: "sg-12", title: "Wander around Jewel Changi", category: "activity", time: "", place: "", mapsUrl: "", infoUrl: "https://vt.tiktok.com/ZSCKsEVQo/", notes: "You can drop your bags off and check in at Jewel and wander around before heading into the transit area!", cost: "", currency: "SGD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
     ]
   },
+  {
+    id: "sample-shanghai-tom-zendaya",
+    name: "Tom Holland and Zendaya's Shanghai Stops",
+    emoji: "🥟",
+    description: "Streetwear, tea houses, viral dumplings and skyline views — the celebrity-spotted Shanghai trail over 3 days.",
+    tags: ["Free", "3 Days", "Solo or Group"],
+    duration: "3 days",
+    price: 0,
+    color: "#4EAED0",
+    trip: { name: "Tom Holland and Zendaya's Shanghai Stops", start: "", end: "", travellers: [], currency: "USD", dates: [] },
+    ideas: [
+      { id: "sh-1", title: "Undefeated Cafe", category: "food", time: "", place: "", mapsUrl: "https://surl.amap.com/aFuK4bMWgn4", infoUrl: "Instagram.com/undefeatedinc", notes: "Streetwear brand that opened their own coffee shop.", cost: "8", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-2", title: "Semir", category: "shopping", time: "", place: "", mapsUrl: "https://surl.amap.com/iPgzjmq1d2fO", infoUrl: "https://semirshop.com/", notes: "Tom Holland bought shorts here to beat the heat and was spotted carrying the bag. The store has gone viral with the shorts selling out in hours!", cost: "", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-3", title: "BalaThÉ (逛山 - Guang Shan)", category: "food", time: "", place: "", mapsUrl: "https://surl.amap.com/17he6LA1xguZ", infoUrl: "https://www.instagram.com/balathe.2024?igsh=dnRwcWEycXpqaWtu", notes: "A tea spot that is all about bringing traditional Chinese teas into the modern lexicon. Try the fruit-based pu-er teas.", cost: "", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-4", title: "Yuyuan Gardens", category: "monument", time: "", place: "", mapsUrl: "https://surl.amap.com/4hYUhPbrE0et", infoUrl: "https://myshanghaiguide.com/yu-gardens-shanghai/", notes: "The gardens close at 4pm so visit then. But also visit the bazaar on a weekday night, it's more beautiful then. Warning: very crowded!", cost: "", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-5", title: "Wei Xiang Zhai (味香斋）", category: "food", time: "", place: "", mapsUrl: "https://surl.amap.com/ziN1RZ3131cQ", infoUrl: "https://vt.tiktok.com/ZS48jfJk6/", notes: "No-fuss 80-year-old noodle shop with a nod from the Michelin guide. Try their noodles with a nutty sesame sauce, beef soup and the crispy pork chop.", cost: "10", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-6", title: "Fu He Hui (副和慧）", category: "food", time: "", place: "", mapsUrl: "https://surl.amap.com/gkOOdH4g1aF", infoUrl: "https://www.instagram.com/fuhehui?igsh=MXM5Mzliem9qaXA0aA==", notes: "15 on Asia's 50 Best Restaurants 2025 list, this is a vegetarian restaurant that marries food delicacies with Chinese zen.", cost: "", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-7", title: "North Bund Green Land (北外滩滨江绿地)", category: "monument", time: "", place: "", mapsUrl: "https://surl.amap.com/2H39Q0ox1j6ho", infoUrl: "https://vt.tiktok.com/ZS48BdwMq/", notes: "For a clear view of the classic Shanghai skyline.", cost: "", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+      { id: "sh-8", title: "Matcha Wang", category: "food", time: "", place: "", mapsUrl: "https://surl.amap.com/1P5yS6uF89q", infoUrl: "https://vt.tiktok.com/ZS482anVD/", notes: "Viral matcha drink known for the little sheep latte art they add to the top.", cost: "8", currency: "USD", bookedStatus: "not-booked", splitBetween: [], paidBy: "" },
+    ]
+  },
 ];
 
 // ─── TripMarketplace ──────────────────────────────────────────────────────────
