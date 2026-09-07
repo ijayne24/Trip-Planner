@@ -804,12 +804,19 @@ function TripSetup({ onDone, savedTrip, onResume }) {
 // ─── BudgetSheet ──────────────────────────────────────────────────────────────
 function BudgetSheet({ ideas, travellers, currency }) {
   const costItems = ideas.filter(i => i.cost && parseFloat(i.cost) > 0);
-  const total = costItems.reduce((s, i) => s + parseFloat(i.cost || 0), 0);
-  // Per person = sum of each item divided by its own split count
-  const perPerson = costItems.reduce((s, i) => {
+
+  // Totals grouped by currency — never sum different currencies as one number
+  const totalsByCurrency = {};
+  const perPersonByCurrency = {};
+  costItems.forEach(i => {
+    const cur = i.currency || currency;
+    const amt = parseFloat(i.cost || 0);
     const splitCount = i.splitBetween?.length || travellers.length || 1;
-    return s + parseFloat(i.cost || 0) / splitCount;
-  }, 0);
+    totalsByCurrency[cur] = (totalsByCurrency[cur] || 0) + amt;
+    perPersonByCurrency[cur] = (perPersonByCurrency[cur] || 0) + amt / splitCount;
+  });
+  const currenciesUsed = Object.keys(totalsByCurrency);
+  const isMixedCurrency = currenciesUsed.length > 1;
 
   const byDay = {};
   costItems.forEach(i => {
@@ -822,12 +829,24 @@ function BudgetSheet({ ideas, travellers, currency }) {
     <div style={styles.budgetWrap}>
       <div style={styles.budgetSummary}>
         <div style={styles.budgetStat}>
-          <div style={styles.budgetNum}>{fmtCurrency(total, currency)}</div>
-          <div style={styles.budgetLabel}>Total Est. Cost</div>
+          {isMixedCurrency ? (
+            currenciesUsed.map(cur => (
+              <div key={cur} style={{ ...styles.budgetNum, fontSize: 18, marginBottom: 2 }}>{fmtCurrency(totalsByCurrency[cur], cur)}</div>
+            ))
+          ) : (
+            <div style={styles.budgetNum}>{fmtCurrency(totalsByCurrency[currenciesUsed[0]] || 0, currenciesUsed[0] || currency)}</div>
+          )}
+          <div style={styles.budgetLabel}>Total Est. Cost{isMixedCurrency ? " (by currency)" : ""}</div>
         </div>
         <div style={styles.budgetStat}>
-          <div style={styles.budgetNum}>{fmtCurrency(perPerson, currency)}</div>
-          <div style={styles.budgetLabel}>Per Person ({travellers.length || 1} pax)</div>
+          {isMixedCurrency ? (
+            currenciesUsed.map(cur => (
+              <div key={cur} style={{ ...styles.budgetNum, fontSize: 18, marginBottom: 2 }}>{fmtCurrency(perPersonByCurrency[cur], cur)}</div>
+            ))
+          ) : (
+            <div style={styles.budgetNum}>{fmtCurrency(perPersonByCurrency[currenciesUsed[0]] || 0, currenciesUsed[0] || currency)}</div>
+          )}
+          <div style={styles.budgetLabel}>Per Person ({travellers.length || 1} pax){isMixedCurrency ? " (by currency)" : ""}</div>
         </div>
         <div style={styles.budgetStat}>
           <div style={styles.budgetNum}>{costItems.length}</div>
