@@ -379,6 +379,7 @@ function IdeaCard({ idea, onEdit, onDelete, onMove, draggable, onDragStart, onDr
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         {/* Drag handle — big enough to tap comfortably */}
         <div
+          data-drag-handle="true"
           draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
           style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, width: 28, minHeight: 44, padding: "0 6px", cursor: "grab", flexShrink: 0, touchAction: "none", userSelect: "none", WebkitUserSelect: "none", opacity: 0.3 }}>
@@ -920,7 +921,9 @@ function exportSampleHTML(sample) {
           ${item.place ? `<div class="stop-place">📍 ${item.place}</div>` : ''}
           ${item.notes ? `<div class="stop-notes">${item.notes}</div>` : ''}
           <div class="stop-chips">
-            ${item.time ? `<span class="chip">🕐 ${item.time}</span>` : ''}
+            ${item.category === "flight" && item.time ? `<span class="chip">🛫 Departs ${item.time}${item.flightNum ? ` · ${item.flightNum}` : ""}</span>` : ""}
+            ${item.category === "flight" && (item.arrivalTime || item.arrivalAirport) ? `<span class="chip">🛬 Arrives${item.arrivalTime ? ` ${item.arrivalTime}` : ""}${item.arrivalAirport ? ` · ${item.arrivalAirport}` : ""}</span>` : ""}
+            ${item.category !== "flight" && item.time ? `<span class="chip">🕐 ${item.time}</span>` : ''}
             ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ''}
             ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn" target="_blank">🗺 Map</a>` : ''}
             ${item.infoUrl?.trim() ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4" target="_blank">🔗 More</a>` : ''}
@@ -1539,7 +1542,9 @@ function StoryView({ trip, ideas }) {
                           {item.place && <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontFamily: "'Inter',sans-serif" }}>📍 {item.place}</div>}
                           {item.notes && <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontStyle: "italic", lineHeight: 1.4, fontFamily: "'Inter',sans-serif" }}>{item.notes}</div>}
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                            {item.time && <span style={styles.storyChip}>{item.time}</span>}
+                            {item.category === "flight" && item.time && <span style={styles.storyChip}>🛫 {item.time}{item.flightNum ? ` · ${item.flightNum}` : ""}</span>}
+                            {item.category === "flight" && (item.arrivalTime || item.arrivalAirport) && <span style={styles.storyChip}>🛬 {item.arrivalTime || ""}{item.arrivalAirport ? ` · ${item.arrivalAirport}` : ""}</span>}
+                            {item.category !== "flight" && item.time && <span style={styles.storyChip}>{item.time}</span>}
                             {item.cost && <span style={{ ...styles.storyChip, color: "#f59e0b" }}>💰 {item.cost} {item.currency}</span>}
                           </div>
                         </div>
@@ -1593,6 +1598,7 @@ export default function TripPlanner() {
   const [savedSnapshot, setSavedSnapshot] = useState(null); // last known saved state
   const ghostRef = useRef(null);
   const touchRef = useRef(null);
+  const daySwipeRef = useRef(null);
   const stateRef = useRef({ ideas, trip });
   stateRef.current = { ideas, trip };
 
@@ -1839,6 +1845,37 @@ export default function TripPlanner() {
       }
     }
     setDragging(null); setDragOver(null); touchRef.current = null;
+  };
+
+  // Swipe left/right on the day panel to move between days (ignored if the touch starts on the drag handle)
+  const onDaySwipeStart = (e) => {
+    if (e.target.closest("[data-drag-handle]")) { daySwipeRef.current = null; return; }
+    const touch = e.touches[0];
+    daySwipeRef.current = { startX: touch.clientX, startY: touch.clientY, locked: false, horizontal: false };
+  };
+  const onDaySwipeMove = (e) => {
+    const ref = daySwipeRef.current;
+    if (!ref) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - ref.startX;
+    const dy = touch.clientY - ref.startY;
+    if (!ref.locked && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      ref.locked = true;
+      ref.horizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (ref.locked && ref.horizontal) e.preventDefault();
+  };
+  const onDaySwipeEnd = (e) => {
+    const ref = daySwipeRef.current;
+    daySwipeRef.current = null;
+    if (!ref || !ref.horizontal) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - ref.startX;
+    if (Math.abs(dx) < 60) return;
+    const idx = tripDates.indexOf(activeDay);
+    if (idx === -1) return;
+    if (dx < 0 && idx < tripDates.length - 1) setActiveDay(tripDates[idx + 1]);
+    else if (dx > 0 && idx > 0) setActiveDay(tripDates[idx - 1]);
   };
 
   // Reorder within a day by moving idea to a specific index
@@ -2240,7 +2277,10 @@ export default function TripPlanner() {
                 data-dropzone={activeDay}
                 onDragOver={e => { e.preventDefault(); setDragOver(activeDay); }}
                 onDragLeave={() => setDragOver(null)}
-                onDrop={e => onDropDay(e, activeDay)}>
+                onDrop={e => onDropDay(e, activeDay)}
+                onTouchStart={onDaySwipeStart}
+                onTouchMove={onDaySwipeMove}
+                onTouchEnd={onDaySwipeEnd}>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexShrink: 0 }}>
                   <div style={styles.dayTitle}>{activeDay ? fmtDate(activeDay) : "—"}</div>
