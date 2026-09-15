@@ -1071,7 +1071,9 @@ function exportStoryHTML(trip, ideas) {
             ${item.place ? `<div class="stop-place">📍 ${item.place}</div>` : ""}
             ${item.notes ? `<div class="stop-notes">${item.notes}</div>` : ""}
             <div class="stop-chips">
-              ${item.time ? `<span class="chip">${item.time}</span>` : ""}
+              ${item.category === "flight" && item.time ? `<span class="chip">🛫 Departs ${item.time}${item.flightNum ? ` · ${item.flightNum}` : ""}</span>` : ""}
+              ${item.category === "flight" && (item.arrivalTime || item.arrivalAirport) ? `<span class="chip">🛬 Arrives${item.arrivalTime ? ` ${item.arrivalTime}` : ""}${item.arrivalAirport ? ` · ${item.arrivalAirport}` : ""}</span>` : ""}
+              ${item.category !== "flight" && item.time ? `<span class="chip">${item.time}</span>` : ""}
               ${item.cost ? `<span class="chip chip-cost">💰 ${item.cost} ${item.currency}</span>` : ""}
               ${item.mapsUrl ? `<a href="${item.mapsUrl}" class="map-btn">🗺 Map</a>` : ""}
               ${item.infoUrl?.trim() ? `<a href="${item.infoUrl}" class="map-btn" style="background:#9B8EC4">🔗 More</a>` : ""}
