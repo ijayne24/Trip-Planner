@@ -164,7 +164,90 @@ function parseGoogleMapsUrl(url) {
 }
 
 function isUrl(str) {
-  return str.startsWith("http://") || str.startsWith("https://") || str.startsWith("maps.");
+  return /^(https?:\/\/|www\.|maps\.|[a-z0-9-]+\.(com|net|org|io|co|app|me|gl|cn|jp|sg|kr|hk|tw)(\/|$))/i.test((str || "").trim());
+}
+
+// ─── Paste-first capture ──────────────────────────────────────────────────────
+const MAPS_HOSTS = /(google\.[a-z.]+\/maps|maps\.google|maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs|amap\.com|maps\.apple\.com)/i;
+const LINK_SOURCES = [
+  [/tiktok\.com/i, "TikTok"],
+  [/instagram\.com/i, "Instagram"],
+  [/youtube\.com|youtu\.be/i, "YouTube"],
+  [/xiaohongshu\.com|xhslink\.com/i, "Xiaohongshu"],
+  [/booking\.com/i, "Booking.com"],
+  [/airbnb\./i, "Airbnb"],
+  [/agoda\./i, "Agoda"],
+  [/hotels\.com/i, "Hotels.com"],
+  [/expedia\./i, "Expedia"],
+  [/tripadvisor\./i, "Tripadvisor"],
+  [/klook\./i, "Klook"],
+];
+
+function isMapsLink(url) { return MAPS_HOSTS.test(url); }
+
+function linkSource(url) {
+  for (const [re, name] of LINK_SOURCES) if (re.test(url)) return name;
+  if (/amap/i.test(url)) return "AMap";
+  if (/maps\.apple/i.test(url)) return "Apple Maps";
+  if (MAPS_HOSTS.test(url)) return "Google Maps";
+  try { return new URL(url.startsWith("http") ? url : "https://" + url).hostname.replace(/^www\./, ""); } catch { return "Link"; }
+}
+
+// Pull a human place name out of a link when the URL actually carries one.
+// Phone "share" short links (maps.app.goo.gl/…, surl.amap.com/…) carry no name
+// — resolving those needs a server round-trip, so we return null and ask for a
+// name rather than silently doing nothing.
+function parsePlaceName(url) {
+  try {
+    const clean = String(url).split("#")[0];
+    const grab = v => {
+      let s = decodeURIComponent(String(v).replace(/\+/g, " ")).replace(/\//g, " ").trim();
+      if (!s) return null;
+      if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(s)) return null; // bare coordinates
+      if (/^[\d\s.,+-]+$/.test(s)) return null;
+      return s.replace(/\s{2,}/g, " ").slice(0, 80);
+    };
+    const place = clean.match(/\/place\/([^/@?#]+)/);
+    if (place) return grab(place[1]);
+    const search = clean.match(/\/maps\/search\/([^/@?#]+)/);
+    if (search && !/^\?/.test(search[1])) return grab(search[1]);
+    const q = clean.match(/[?&](?:q|query|destination|daddr|name|address)=([^&]+)/i);
+    if (q) return grab(q[1]);
+  } catch {}
+  return null;
+}
+
+const CATEGORY_HINTS = [
+  ["accommodation", /booking\.com|airbnb\.|agoda\.|hotels\.com|expedia\.|\b(hotel|hostel|ryokan|inn|resort|guesthouse|guest house|villa|lodge)\b/i],
+  ["food", /\b(restaurant|cafe|café|coffee|ramen|sushi|izakaya|bar|bistro|kitchen|eatery|bakery|patisserie|diner|grill|noodle|dim sum|bbq|brunch|teahouse|tea house)\b/i],
+  ["monument", /\b(museum|temple|shrine|castle|palace|cathedral|church|tower|memorial|monument|gallery|ruins|fort)\b/i],
+  ["shopping", /\b(mall|market|store|shop|outlet|boutique|bazaar|department store)\b/i],
+  ["transport", /\b(airport|station|terminal|ferry|pier)\b/i],
+  ["flight", /\b(airways|airlines)\b/i],
+];
+
+function guessCategory(text) {
+  if (!text) return null;
+  for (const [cat, re] of CATEGORY_HINTS) if (re.test(text)) return cat;
+  return null;
+}
+
+// Works out what a pasted link is and which fields it should fill.
+// Returns { patch, note } or null when the paste is ordinary text.
+function readPastedLink(pasted, form, categoryTouched, forceField) {
+  if (!isUrl(pasted)) return null;
+  const url = pasted.trim();
+  const maps = isMapsLink(url);
+  const field = forceField || (maps ? "mapsUrl" : "infoUrl");
+  const name = parsePlaceName(url);
+  const hadTitle = !!(form.title || "").trim();
+  const patch = { [field]: url };
+  if (name && !hadTitle) patch.title = name;
+  if (!categoryTouched) {
+    const guess = guessCategory([name || "", url].join(" "));
+    if (guess) patch.category = guess;
+  }
+  return { patch, note: { url, source: linkSource(url), named: !!(name || hadTitle), field } };
 }
 
 // ─── Stays occupy NIGHTS, not days ────────────────────────────────────────────
@@ -211,6 +294,99 @@ function stayDateLabel(stay) {
   return `${fmtDate(stay.date)} → ${fmtDate(stay.checkOut)} · ${n} night${n !== 1 ? "s" : ""}`;
 }
 
+// ─── Stay date-range calendar ─────────────────────────────────────────────────
+// Tap once for check-in, tap again for check-out. Dates outside the trip are
+// blocked, except the morning after the last day, so the final night of the
+// trip can still be expressed. Counts nights, because that is what you book.
+function StayCalendar({ tripDates, checkIn, checkOut, onChange }) {
+  const dates = tripDates || [];
+  if (!dates.length) {
+    return <div style={styles.calEmpty}>Set your trip dates first and they'll show up here.</div>;
+  }
+
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const inTrip = new Set(dates);
+
+  const lastD = new Date(dates[dates.length - 1] + "T00:00:00");
+  const dayAfter = iso(new Date(lastD.getFullYear(), lastD.getMonth(), lastD.getDate() + 1));
+
+  const firstD = new Date(dates[0] + "T00:00:00");
+  const months = [];
+  let cur = new Date(firstD.getFullYear(), firstD.getMonth(), 1);
+  const endMonth = new Date(lastD.getFullYear(), lastD.getMonth() + 1, 1);
+  while (cur < endMonth) {
+    months.push(new Date(cur));
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+
+  const canTap = s => inTrip.has(s) || (s === dayAfter && !!checkIn && !checkOut && s > checkIn);
+
+  const tap = s => {
+    if (!checkIn || checkOut) { onChange(s, ""); return; }  // start a fresh range
+    if (s <= checkIn) { onChange(s, ""); return; }           // tapped back — restart
+    onChange(checkIn, s);                                     // close the range
+  };
+
+  const nights = checkIn && checkOut ? stayNights({ date: checkIn, checkOut }) : 0;
+
+  return (
+    <div>
+      <div style={styles.calWrap}>
+        {months.map(m => {
+          const y = m.getFullYear(), mo = m.getMonth();
+          const lead = new Date(y, mo, 1).getDay();
+          const dim = new Date(y, mo + 1, 0).getDate();
+          const cells = [...Array(lead).fill(null), ...Array.from({ length: dim }, (_, i) => new Date(y, mo, i + 1))];
+          return (
+            <div key={`${y}-${mo}`} style={{ marginBottom: 6 }}>
+              <div style={styles.calMonth}>{m.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>
+              <div style={styles.calGrid}>
+                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={`dow${i}`} style={styles.calDow}>{d}</div>)}
+                {cells.map((d, i) => {
+                  if (!d) return <div key={`blank${i}`} />;
+                  const s = iso(d);
+                  const isIn = s === checkIn;
+                  const isOut = s === checkOut;
+                  const isMid = !!checkIn && !!checkOut && s > checkIn && s < checkOut;
+                  const tappable = canTap(s);
+                  const outsideTrip = !inTrip.has(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={!tappable}
+                      onClick={() => tap(s)}
+                      style={{
+                        ...styles.calCell,
+                        ...(tappable ? {} : styles.calCellOff),
+                        ...(isMid ? styles.calCellMid : {}),
+                        ...(isIn ? styles.calCellIn : {}),
+                        ...(isOut ? styles.calCellOut : {}),
+                        ...(outsideTrip && tappable ? styles.calCellExtra : {}),
+                      }}>
+                      {d.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={styles.calFooter}>
+        <span style={styles.calSummary}>
+          {!checkIn && "Tap your check-in date"}
+          {checkIn && !checkOut && `Check in ${fmtDate(checkIn)} — now tap check-out`}
+          {checkIn && checkOut && `${fmtDate(checkIn)} → ${fmtDate(checkOut)} · ${nights} night${nights !== 1 ? "s" : ""}`}
+        </span>
+        {checkIn && (
+          <button type="button" style={styles.calClear} onClick={() => onChange("", "")}>Clear</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── IdeaForm modal ───────────────────────────────────────────────────────────
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea ? {
@@ -229,6 +405,10 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
     flightNum: "", departTerminal: "", arrivalDate: "", arrivalTime: "", arrivalAirport: "",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Paste-first capture: remember what the last pasted link was so the form can
+  // say so, and stop guessing a category once you've picked one yourself.
+  const [linkNote, setLinkNote] = useState(null);
+  const [catTouched, setCatTouched] = useState(!!idea);
   const isSchedulable = form.title && form.date;
   const isStay = form.category === "accommodation";
   const isFlight = form.category === "flight";
@@ -256,23 +436,28 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
               }}
               onPaste={e => {
                 const pasted = e.clipboardData.getData("text").trim();
-                if (isUrl(pasted)) {
-                  e.preventDefault();
-                  // It's a URL — put it in mapsUrl and try to extract a name
-                  const extracted = parseGoogleMapsUrl(pasted);
-                  setForm(f => ({
-                    ...f,
-                    mapsUrl: pasted,
-                    title: extracted || f.title,
-                  }));
-                }
+                const read = readPastedLink(pasted, form, catTouched);
+                if (!read) return;              // ordinary text pastes as normal
+                e.preventDefault();
+                setForm(f => ({ ...f, ...read.patch }));
+                setLinkNote(read.note);
               }}
               onKeyDown={e => { if (e.key === "Enter" && form.title.trim()) onSave({ ...form, id: idea?.id || uid() }); }} />
-            {form.mapsUrl && form.title && (
-              <div style={{ fontSize: 11, color: "#10b981", marginTop: 4, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 4 }}>
-                <IconCheck size={12} /> Link saved · <a href={form.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#C85A2A" }}>preview</a>
+            {linkNote ? (
+              <div style={linkNote.named ? styles.pasteOk : styles.pasteAsk}>
+                {linkNote.named ? <IconCheck size={12} /> : <IconLink size={12} />}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  {linkNote.source} link saved{linkNote.named ? "" : " — give it a name above"}
+                </span>
+                <a href={linkNote.url} target="_blank" rel="noopener noreferrer" style={{ color: "#C85A2A", flexShrink: 0 }}>preview</a>
               </div>
-            )}
+            ) : (form.mapsUrl || form.infoUrl) && form.title ? (
+              <div style={styles.pasteOk}>
+                <IconCheck size={12} />
+                <span style={{ flex: 1, minWidth: 0 }}>Link saved</span>
+                <a href={form.mapsUrl || form.infoUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#C85A2A", flexShrink: 0 }}>preview</a>
+              </div>
+            ) : null}
           </div>
 
           {/* Category */}
@@ -280,7 +465,7 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
             <label style={styles.label}>Category</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {CATEGORIES.map(c => (
-                <button key={c.id} onClick={() => set("category", c.id)}
+                <button key={c.id} onClick={() => { setCatTouched(true); set("category", c.id); }}
                   style={{ ...styles.catChip, background: form.category === c.id ? c.color + "26" : "#fff", borderColor: form.category === c.id ? c.color : "#EDE8E1", color: "#1B2B4B", fontWeight: form.category === c.id ? 600 : 500 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", width: 18, height: 18 }}>{CATEGORY_ICONS[c.id] ? React.createElement(CATEGORY_ICONS[c.id], { size: 16 }) : null}</span> {c.label}
                 </button>
@@ -327,22 +512,14 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
               </div>
             </>
           ) : form.category === "accommodation" ? (
-            <>
-              <div style={styles.formHalf}>
-                <label style={styles.label}>Check-in date</label>
-                <select style={styles.input} value={form.date} onChange={e => set("date", e.target.value)}>
-                  <option value="">No date yet</option>
-                  {(tripDates || []).map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-                </select>
-              </div>
-              <div style={styles.formHalf}>
-                <label style={styles.label}>Check-out date</label>
-                <select style={styles.input} value={form.checkOut || ""} onChange={e => set("checkOut", e.target.value)}>
-                  <option value="">Same as check-in</option>
-                  {(tripDates || []).filter(d => !form.date || d > form.date).map(d => <option key={d} value={d}>{fmtDate(d)}</option>)}
-                </select>
-              </div>
-            </>
+            <div style={styles.formFull}>
+              <label style={styles.label}>Nights</label>
+              <StayCalendar
+                tripDates={tripDates}
+                checkIn={form.date}
+                checkOut={form.checkOut || ""}
+                onChange={(ci, co) => setForm(f => ({ ...f, date: ci, checkOut: co }))} />
+            </div>
           ) : (
             <>
               <div style={styles.formHalf}>
@@ -435,10 +612,11 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
                 onChange={e => set("mapsUrl", e.target.value)}
                 onPaste={e => {
                   const pasted = e.clipboardData.getData("text").trim();
-                  if (isUrl(pasted) && !form.title) {
-                    const extracted = parseGoogleMapsUrl(pasted);
-                    if (extracted) setForm(f => ({ ...f, title: extracted }));
-                  }
+                  const read = readPastedLink(pasted, form, catTouched, "mapsUrl");
+                  if (!read) return;
+                  e.preventDefault();
+                  setForm(f => ({ ...f, ...read.patch }));
+                  setLinkNote(read.note);
                 }} />
             </div>
             <div>
@@ -446,7 +624,15 @@ function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
               <input style={{ ...styles.input, marginTop: 6, ...(form.infoUrl ? { borderColor: "#9B8EC4" } : {}) }}
                 placeholder="https://tiktok.com/... or booking link"
                 value={form.infoUrl || ""}
-                onChange={e => set("infoUrl", e.target.value)} />
+                onChange={e => set("infoUrl", e.target.value)}
+                onPaste={e => {
+                  const pasted = e.clipboardData.getData("text").trim();
+                  const read = readPastedLink(pasted, form, catTouched, "infoUrl");
+                  if (!read) return;
+                  e.preventDefault();
+                  setForm(f => ({ ...f, ...read.patch }));
+                  setLinkNote(read.note);
+                }} />
             </div>
           </div>
 
@@ -2685,6 +2871,26 @@ const styles = {
 
   // Stay banner
   stayBanner: { background: "#80906D14", border: "1px solid #80906D33", borderLeft: "3px solid #80906D", borderRadius: 12, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
+  // Paste-first capture feedback
+  pasteOk: { fontSize: 11, color: "#5E7A52", marginTop: 6, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 5, background: "#80906D14", border: "1px solid #80906D33", borderRadius: 8, padding: "6px 10px" },
+  pasteAsk: { fontSize: 11, color: "#A8702F", marginTop: 6, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 5, background: "#DA9C4118", border: "1px solid #DA9C4140", borderRadius: 8, padding: "6px 10px" },
+
+  // Stay date-range calendar
+  calWrap: { background: "#fff", border: "1px solid #EDE8E1", borderRadius: 12, padding: "10px 12px 6px", marginTop: 6 },
+  calEmpty: { background: "#fff", border: "1px dashed #DDD5CA", borderRadius: 12, padding: "18px 12px", marginTop: 6, fontSize: 12, color: "#6B7A90", textAlign: "center", fontFamily: "'Inter',sans-serif" },
+  calMonth: { fontSize: 12, fontWeight: 700, color: "#1B2B4B", fontFamily: "'Inter',sans-serif", textAlign: "center", padding: "4px 0 8px" },
+  calGrid: { display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 },
+  calDow: { fontSize: 10, fontWeight: 600, color: "#9AA5B4", textAlign: "center", padding: "2px 0 4px", fontFamily: "'Inter',sans-serif" },
+  calCell: { height: 38, border: "none", borderRadius: 8, background: "#FAF7F2", color: "#1B2B4B", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Inter',sans-serif", padding: 0, transition: "background .15s" },
+  calCellOff: { background: "transparent", color: "#D6CFC5", cursor: "not-allowed" },
+  calCellMid: { background: "#80906D26", borderRadius: 0 },
+  calCellIn: { background: "#80906D", color: "#fff", fontWeight: 700, borderRadius: "8px 0 0 8px" },
+  calCellOut: { background: "#80906D", color: "#fff", fontWeight: 700, borderRadius: "0 8px 8px 0" },
+  calCellExtra: { background: "#FAF7F2", color: "#6B7A90", border: "1px dashed #C9B8A8" },
+  calFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 8 },
+  calSummary: { fontSize: 12, color: "#1B2B4B", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
+  calClear: { background: "none", border: "none", color: "#6B7A90", fontSize: 11, cursor: "pointer", textDecoration: "underline", fontFamily: "'Inter',sans-serif", padding: 4 },
+
   checkoutLine: { display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px dashed #DDD5CA", borderRadius: 10, padding: "7px 12px", marginBottom: 8 },
   checkoutDot: { width: 6, height: 6, borderRadius: "50%", background: "#80906D", flexShrink: 0 },
   checkoutLabel: { fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6B7A90", fontWeight: 600, fontFamily: "'Inter',sans-serif", flexShrink: 0 },
