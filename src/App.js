@@ -112,6 +112,80 @@ const ROUTE_FILLER = [
   /^(go|head|let'?s)\s+(to|for|out to)?\s*/i,
 ];
 
+// Coordinates hiding inside a saved link. These are exact, so they beat any
+// name. Short maps.app.goo.gl links don't carry them, but desktop Google links
+// and Apple Maps links usually do.
+function parseLatLng(url) {
+  if (!url) return null;
+  const s = String(url);
+  const ok = (lat, lng) => {
+    const a = parseFloat(lat), b = parseFloat(lng);
+    if (!isFinite(a) || !isFinite(b)) return null;
+    if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+    if (a === 0 && b === 0) return null;
+    return `${a.toFixed(6)},${b.toFixed(6)}`;
+  };
+  let m;
+  if ((m = s.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+  if ((m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+  if ((m = s.match(/[?&](?:ll|sll|center)=(-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+  if ((m = s.match(/[?&](?:q|query|daddr|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/))) return ok(m[1], m[2]);
+  return null;
+}
+
+// Where a pinned place actually is. Coordinates already saved on the idea win,
+// then anything readable straight out of the link.
+function ideaCoords(idea) {
+  if (!idea) return null;
+  const lat = Number(idea.lat), lng = Number(idea.lng);
+  if (isFinite(lat) && isFinite(lng) && !(lat === 0 && lng === 0) && (idea.lat !== undefined && idea.lat !== "")) {
+    return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  }
+  return parseLatLng(idea.mapsUrl);
+}
+
+// ─── Resolving shared map links ───────────────────────────────────────────────
+// A maps.app.goo.gl link carries no coordinates and a browser is not allowed to
+// follow it, so Flokk asks its own tiny server function to do it. Results are
+// kept forever because a place doesn't move. Failures are not cached, so a
+// place that couldn't be resolved today can be resolved tomorrow.
+const LINK_CACHE_KEY = "flokk-linkcache-v1";
+const _linkTried = new Set();   // don't retry the same link twice in one session
+
+function readLinkCache() {
+  try { return JSON.parse(localStorage.getItem(LINK_CACHE_KEY) || "{}") || {}; } catch { return {}; }
+}
+function writeLinkCache(c) {
+  try { localStorage.setItem(LINK_CACHE_KEY, JSON.stringify(c)); } catch {}
+}
+
+async function resolveMapLink(url) {
+  const key = (url || "").trim();
+  if (!key) return null;
+
+  const cache = readLinkCache();
+  if (cache[key]) return cache[key];
+  if (_linkTried.has(key)) return null;
+  _linkTried.add(key);
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 9000);
+    const r = await fetch(`/api/resolve?url=${encodeURIComponent(key)}`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data || !data.ok || !isFinite(data.lat) || !isFinite(data.lng)) return null;
+    const hit = { lat: data.lat, lng: data.lng, name: data.name || null };
+    cache[key] = hit;
+    writeLinkCache(cache);
+    return hit;
+  } catch {
+    // Not deployed yet, offline, or Google changed something. Carry on quietly.
+    return null;
+  }
+}
+
 // The text Google should look for. The place field wins when it's filled,
 // because it's more specific than a conversational title.
 function routeName(idea) {
@@ -134,13 +208,31 @@ function routeName(idea) {
   return t.length >= 2 ? t : null;
 }
 
-// A stop Flokk can send to Google, in day order.
+// Only ideas with a saved map link go in a route. A vague entry like "Night at
+// Shimokitazawa" is real planning, but sending it to Google guesses, and a wrong
+// guess is worse than leaving it out. Those are counted and mentioned, not routed.
 function dayRouteStops(ideas, date) {
-  return (ideas || [])
+  const onDay = (ideas || [])
     .filter(i => i.date === date && i.category !== "accommodation")
-    .sort((a, b) => (a.time || "99") > (b.time || "99") ? 1 : -1)
-    .map(i => ({ id: i.id, name: routeName(i), title: i.title, time: i.time, category: i.category }))
-    .filter(s => s.name);
+    .sort((a, b) => (a.time || "99") > (b.time || "99") ? 1 : -1);
+
+  const stops = [];
+  let skipped = 0;
+  for (const i of onDay) {
+    if (!(i.mapsUrl && i.mapsUrl.trim())) { skipped++; continue; }
+    // Exact coordinates beat any name. Otherwise use what you've told us the
+    // place is called, which you can correct once and it sticks.
+    const coords = ideaCoords(i);
+    const name = routeName(i);
+    const value = coords || name;
+    if (!value) { skipped++; continue; }
+    stops.push({
+      id: i.id, value, name, title: i.title, time: i.time,
+      category: i.category, exact: !!coords, mapsUrl: i.mapsUrl,
+    });
+  }
+  stops.skipped = skipped;
+  return stops;
 }
 
 function dirUrl(names, mode) {
@@ -463,13 +555,45 @@ const ROUTE_MODES = [
   { id: "driving", label: "Drive" },
 ];
 
-function DayRouteSheet({ stops, dateLabel, isMobile, onClose }) {
+function DayRouteSheet({ stops, dateLabel, isMobile, skipped, onClose, onFixStop, onResolved }) {
   const [mode, setMode] = useState("walking");
   const [dropped, setDropped] = useState(() => new Set());
+  const [editing, setEditing] = useState(null);   // id of the stop being corrected
+  const [draft, setDraft] = useState("");
+
+  // Quietly work out where the un-pinpointed stops actually are. No spinner and
+  // no status text: either the exact tags appear or nothing changes.
+  //
+  // The list is captured once when the sheet opens. Deriving it from `stops`
+  // instead would rebuild it after every result, which restarts this loop and
+  // cancels the requests already in flight, so only every other link resolves.
+  const toResolve = useRef(null);
+  if (toResolve.current === null) {
+    toResolve.current = stops.filter(s => !s.exact && s.mapsUrl).map(s => ({ id: s.id, url: s.mapsUrl }));
+  }
+  useEffect(() => {
+    const list = toResolve.current;
+    if (!list || !list.length || !onResolved) return;
+    let cancelled = false;
+    (async () => {
+      for (const item of list) {
+        if (cancelled) break;
+        const hit = await resolveMapLink(item.url);
+        if (hit && !cancelled) onResolved(item.id, hit.lat, hit.lng);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [onResolved]);
 
   const chosen = stops.filter(s => !dropped.has(s.id));
-  const names = chosen.map(s => s.name);
+  const names = chosen.map(s => s.value);
   const legs = routeLegs(names, mode, isMobile ? 5 : 10);
+
+  const startEdit = s => { setEditing(s.id); setDraft(s.name || s.title || ""); };
+  const commitEdit = () => {
+    if (editing && onFixStop) onFixStop(editing, draft.trim());
+    setEditing(null);
+  };
 
   const toggle = id => setDropped(prev => {
     const next = new Set(prev);
@@ -497,21 +621,50 @@ function DayRouteSheet({ stops, dateLabel, isMobile, onClose }) {
         </div>
 
         <div style={styles.routeList}>
-          <div style={styles.routeHint}>Sending these to Google. Tap one to leave it out.</div>
+          <div style={styles.routeHint}>
+            Tap a stop to leave it out. Tap the pencil if Google sends you somewhere odd.
+          </div>
           {stops.map((s, i) => {
             const off = dropped.has(s.id);
+            if (editing === s.id) {
+              return (
+                <div key={s.id} style={styles.routeStop}>
+                  <span style={{ ...styles.routeDot, background: (CAT[s.category] || CAT.misc).color }}>{i + 1}</span>
+                  <input autoFocus style={styles.routeEdit} value={draft}
+                    placeholder="What should Google search for?"
+                    onChange={e => setDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }} />
+                  <button type="button" style={styles.routeEditSave} onClick={commitEdit}><IconCheck size={14} /></button>
+                </div>
+              );
+            }
             return (
-              <button key={s.id} type="button" onClick={() => toggle(s.id)}
-                style={{ ...styles.routeStop, ...(off ? styles.routeStopOff : {}) }}>
-                <span style={{ ...styles.routeDot, background: off ? "#D6CFC5" : (CAT[s.category] || CAT.misc).color }}>{off ? "" : i + 1}</span>
-                <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <span style={styles.routeStopName}>{s.name}</span>
-                  {s.name !== s.title && <span style={styles.routeStopFrom}>{s.title}</span>}
-                </span>
-                {s.time && <span style={styles.routeStopTime}>{s.time}</span>}
-              </button>
+              <div key={s.id} style={{ ...styles.routeStop, ...(off ? styles.routeStopOff : {}) }}>
+                <button type="button" onClick={() => toggle(s.id)} style={styles.routeStopMain}>
+                  <span style={{ ...styles.routeDot, background: off ? "#D6CFC5" : (CAT[s.category] || CAT.misc).color }}>{off ? "" : i + 1}</span>
+                  <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                    <span style={styles.routeStopName}>
+                      {s.exact ? s.title : s.name}
+                      {s.exact && <span style={styles.routeExact}>exact</span>}
+                    </span>
+                    {!s.exact && s.name !== s.title && <span style={styles.routeStopFrom}>{s.title}</span>}
+                  </span>
+                  {s.time && <span style={styles.routeStopTime}>{s.time}</span>}
+                </button>
+                {!s.exact && (
+                  <button type="button" style={styles.routeEditBtn} onClick={() => startEdit(s)} aria-label="Fix this stop">
+                    <IconEdit size={13} />
+                  </button>
+                )}
+              </div>
             );
           })}
+          {skipped > 0 && (
+            <div style={styles.routeSkipped}>
+              {skipped} idea{skipped === 1 ? "" : "s"} left out, {skipped === 1 ? "it has" : "they have"} no map link.
+              Routing {skipped === 1 ? "it" : "them"} would only guess.
+            </div>
+          )}
         </div>
 
         <div style={styles.routeFooter}>
@@ -1920,8 +2073,9 @@ function MapView({ trip, ideas }) {
             <div style={styles.mapDayFooter}>
               <span>{allStops.length} stop{allStops.length !== 1 ? "s" : ""}</span>
               {(() => {
-                const names = stops.map(routeName).filter(Boolean);
-                const legs = routeLegs(names, "walking", 5);
+                // Same rule as the Day Route sheet: linked places only.
+                const routable = dayRouteStops(ideas, date).map(s => s.value);
+                const legs = routeLegs(routable, "walking", 5);
                 return legs.length ? (
                   <a href={legs[0].url} target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>
                     <IconMap size={13} /> Full day route
@@ -2103,6 +2257,11 @@ export default function TripPlanner() {
   const [showForm, setShowForm] = useState(false);
   const [editIdea, setEditIdea] = useState(null);
   const [routeDay, setRouteDay] = useState(null);   // day whose route sheet is open
+
+  // Stable, so the resolver effect doesn't restart on every render.
+  const handleResolved = useCallback((id, lat, lng) => {
+    setIdeas(prev => prev.map(i => String(i.id) === String(id) ? { ...i, lat, lng } : i));
+  }, []);
   const [activeDay, setActiveDay] = useState(null);
   const [mobileView, setMobileView] = useState("pool"); // "pool" | "schedule"
   const [dragging, setDragging] = useState(null);
@@ -2542,13 +2701,19 @@ export default function TripPlanner() {
           onCancel={() => { setShowForm(false); setEditIdea(null); }} />
       )}
 
-      {routeDay && (
-        <DayRouteSheet
-          stops={dayRouteStops(ideas, routeDay)}
-          dateLabel={fmtDate(routeDay)}
-          isMobile={isMobile}
-          onClose={() => setRouteDay(null)} />
-      )}
+      {routeDay && (() => {
+        const stops = dayRouteStops(ideas, routeDay);
+        return (
+          <DayRouteSheet
+            stops={stops}
+            skipped={stops.skipped || 0}
+            dateLabel={fmtDate(routeDay)}
+            isMobile={isMobile}
+            onFixStop={(id, text) => setIdeas(prev => prev.map(i => i.id === id ? { ...i, place: text } : i))}
+            onResolved={handleResolved}
+            onClose={() => setRouteDay(null)} />
+        );
+      })()}
 
       {/* Welcome banner for new visitors */}
       {showWelcomeBanner && screen === "dashboard" && (
@@ -3121,7 +3286,13 @@ const styles = {
   routeModeOn: { background: "#1B2B4B", color: "#fff", borderColor: "#1B2B4B" },
   routeList: { overflowY: "auto", padding: "10px 20px 4px", display: "flex", flexDirection: "column", gap: 6 },
   routeHint: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#6B7A90", paddingBottom: 4 },
-  routeStop: { display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #EDE8E1", borderRadius: 12, padding: "10px 12px", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'Inter',sans-serif" },
+  routeStop: { display: "flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #EDE8E1", borderRadius: 12, padding: "8px 10px", width: "100%", fontFamily: "'Inter',sans-serif" },
+  routeStopMain: { display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "'Inter',sans-serif" },
+  routeEditBtn: { background: "none", border: "none", cursor: "pointer", padding: "6px 4px", color: "#A79C8E", flexShrink: 0 },
+  routeEdit: { flex: 1, minWidth: 0, border: "1px solid #C9B8A8", borderRadius: 8, padding: "7px 9px", fontSize: 13, fontFamily: "'Inter',sans-serif", color: "#1B2B4B", background: "#FAF7F2" },
+  routeEditSave: { background: "#80906D", border: "none", borderRadius: 8, width: 30, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", cursor: "pointer", flexShrink: 0 },
+  routeExact: { fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "#5E7A52", background: "#80906D22", borderRadius: 20, padding: "2px 6px", marginLeft: 6, verticalAlign: "middle" },
+  routeSkipped: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#6B7A90", background: "#F0EBE3", borderRadius: 10, padding: "9px 11px", marginTop: 2, lineHeight: 1.5 },
   routeStopOff: { background: "#F5F1EA", opacity: 0.55 },
   routeDot: { width: 22, height: 22, borderRadius: "50%", color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   routeStopName: { display: "block", fontSize: 13.5, fontWeight: 600, color: "#1B2B4B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
