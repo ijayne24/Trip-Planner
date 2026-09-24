@@ -1,5 +1,5 @@
 import React from 'react';
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STORAGE_KEY = "tripplanner-v2";
@@ -96,81 +96,77 @@ function cleanForMaps(title) {
 }
 
 // Build a Google Maps multi-stop directions URL — only uses real map links
-// A waypoint Google can actually resolve. Coordinates are best, then the place
-// name. The old version passed the saved maps.app.goo.gl link in here, but this
-// slot expects a place, not a URL, so Google searched for the text of the link
-// and the route came out wrong.
-function routePoint(idea) {
-  const ll = ideaLatLng(idea);
-  if (ll) return `${ll.lat.toFixed(6)},${ll.lng.toFixed(6)}`;
-  const name = [idea.title, idea.place].filter(Boolean).join(", ").trim();
-  return name || null;
+// ─── Day route ────────────────────────────────────────────────────────────────
+// Routes are built from NAMES, not saved links. Two reasons. A shortened
+// maps.app.goo.gl link cannot be used as a waypoint at all, which is why the old
+// version produced nonsense. And routing by name means a vague entry like
+// "Night at Shimokitazawa" is just as routable as a specific restaurant, so
+// nothing gets dropped and the day keeps its real shape.
+
+// Leading filler people write in front of a place. "Morning at Ueno" is Ueno.
+const ROUTE_FILLER = [
+  /^(early\s+)?(morning|afternoon|evening|night|sunrise|sunset)\s+(at|in|around)\s+/i,
+  /^(breakfast|brunch|lunch|dinner|supper|drinks|coffee|tea|snacks?|dessert)\s+(at|in)\s+/i,
+  /^(shopping|shop|stay|stroll|walk|wander|hang out|chill|relax)\s+(at|in|around|through)\s+/i,
+  /^(explore|visit|see|check out|try|discover|browse|revisit)\s+/i,
+  /^(go|head|let'?s)\s+(to|for|out to)?\s*/i,
+];
+
+// The text Google should look for. The place field wins when it's filled,
+// because it's more specific than a conversational title.
+function routeName(idea) {
+  if (!idea) return null;
+  const place = (idea.place || "").trim();
+  if (place) return place;
+  // Strip leading emoji and punctuation first, or the patterns below never
+  // anchor. Then up to two passes, so "Go shopping at Myeongdong" loses both
+  // halves of its preamble.
+  let t = (idea.title || "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  if (!t) return null;
+  for (let pass = 0; pass < 2; pass++) {
+    let changed = false;
+    for (const re of ROUTE_FILLER) {
+      const next = t.replace(re, "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+      if (next !== t && next.length >= 2) { t = next; changed = true; break; }
+    }
+    if (!changed) break;
+  }
+  return t.length >= 2 ? t : null;
 }
 
-// Phones only honour three waypoints in a directions link, so a long day gets
-// split into legs rather than silently losing stops.
-const MAX_WAYPOINTS = 3;
+// A stop Flokk can send to Google, in day order.
+function dayRouteStops(ideas, date) {
+  return (ideas || [])
+    .filter(i => i.date === date && i.category !== "accommodation")
+    .sort((a, b) => (a.time || "99") > (b.time || "99") ? 1 : -1)
+    .map(i => ({ id: i.id, name: routeName(i), title: i.title, time: i.time, category: i.category }))
+    .filter(s => s.name);
+}
 
-function dirUrl(origin, destination, waypoints, mode, navigate) {
+function dirUrl(names, mode) {
   const p = new URLSearchParams();
   p.set("api", "1");
-  p.set("origin", origin);
-  p.set("destination", destination);
-  if (waypoints && waypoints.length) p.set("waypoints", waypoints.join("|"));
-  p.set("travelmode", mode || "driving");
-  if (navigate) p.set("dir_action", "navigate");
+  p.set("origin", names[0]);
+  p.set("destination", names[names.length - 1]);
+  const mid = names.slice(1, -1);
+  if (mid.length) p.set("waypoints", mid.join("|"));
+  p.set("travelmode", mode || "walking");
   return `https://www.google.com/maps/dir/?${p.toString()}`;
 }
 
-// Where you sleep bookends the day. On a day you change hotels that means
-// leaving last night's place and ending at tonight's, which is what actually
-// happens rather than a loop back to where you started.
-function buildDayRouteLegs(ideas, trip, date, mode) {
-  if (!date) return [];
-  const { staysOnDay, checkoutsOnDay } = buildStayMaps(ideas, trip.dates || []);
-  const startStay = (checkoutsOnDay[date] || [])[0] || (staysOnDay[date] || [])[0] || null;
-  const endStay = (staysOnDay[date] || [])[0] || null;
-
-  const stops = ideas
-    .filter(i => i.date === date && i.category !== "accommodation")
-    .sort((a, b) => (a.time || "99") > (b.time || "99") ? 1 : -1)
-    .map(routePoint)
-    .filter(Boolean);
-
-  const startPt = startStay ? routePoint(startStay) : null;
-  const endPt = endStay ? routePoint(endStay) : null;
-
-  // Full ordered chain: hotel, every stop, hotel.
-  const chain = [];
-  if (startPt) chain.push(startPt);
-  chain.push(...stops);
-  if (endPt && endPt !== chain[chain.length - 1]) chain.push(endPt);
-
-  if (chain.length < 2) return [];
-
+// Phones only honour three waypoints in a directions link (five stops in total),
+// desktop honours nine. Rather than silently losing stops, a long day splits.
+function routeLegs(names, mode, perLeg) {
+  const max = perLeg || 5;
+  if (names.length < 2) return [];
   const legs = [];
   let i = 0;
-  while (i < chain.length - 1) {
-    const origin = chain[i];
-    const slice = chain.slice(i + 1, i + 1 + MAX_WAYPOINTS + 1); // waypoints + destination
-    const destination = slice[slice.length - 1];
-    const waypoints = slice.slice(0, -1);
-    legs.push({ url: dirUrl(origin, destination, waypoints, mode), stops: slice.length });
-    i += slice.length;
+  while (i < names.length - 1) {
+    const slice = names.slice(i, i + max);
+    legs.push({ url: dirUrl(slice, mode), names: slice });
+    i += slice.length - 1;   // the last stop of a leg is the first of the next
   }
   return legs;
-}
-
-// Kept for the single "Day Route" button: the first leg, or null.
-function buildDayRouteUrl(stops, trip, date, ideas) {
-  if (trip && date && ideas) {
-    const legs = buildDayRouteLegs(ideas, trip, date);
-    return legs.length ? legs[0].url : null;
-  }
-  // Fallback when we only have a list of stops.
-  const pts = (stops || []).map(routePoint).filter(Boolean);
-  if (pts.length < 2) return pts.length === 1 ? dirUrl(pts[0], pts[0], [], "driving") : null;
-  return dirUrl(pts[0], pts[pts.length - 1], pts.slice(1, -1).slice(0, MAX_WAYPOINTS), "driving");
 }
 
 // Detect which map app a URL leads to
@@ -284,118 +280,6 @@ function parsePlaceName(url) {
     if (q) return grab(q[1]);
   } catch {}
   return null;
-}
-
-// ─── Where things actually are ────────────────────────────────────────────────
-// Flokk used to store a link to a place but never the place itself, so it could
-// never answer "is this near my other stops?". These pull real coordinates out
-// of a saved link where the link carries them.
-function parseLatLng(url) {
-  if (!url) return null;
-  const s = String(url);
-  const ok = (lat, lng) => {
-    const a = parseFloat(lat), b = parseFloat(lng);
-    if (!isFinite(a) || !isFinite(b)) return null;
-    if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
-    if (a === 0 && b === 0) return null;
-    return { lat: a, lng: b };
-  };
-  let m;
-  // Google data blob: !3d35.6812!4d139.7671 — this is the actual pin, so it
-  // beats the @ coordinates, which are only where the camera was pointing.
-  if ((m = s.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/))) return ok(m[1], m[2]);
-  // Google desktop viewport: /@35.6812,139.7671,17z
-  if ((m = s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);
-  // Apple / generic: ll=, sll=, center=
-  if ((m = s.match(/[?&](?:ll|sll|center)=(-?\d+\.\d+),(-?\d+\.\d+)/))) return ok(m[1], m[2]);
-  // q= / query= / daddr= holding bare coordinates
-  if ((m = s.match(/[?&](?:q|query|daddr|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/))) return ok(m[1], m[2]);
-  return null;
-}
-
-// Best guess at where an idea is, using anything already saved on it.
-function ideaLatLng(idea) {
-  if (!idea) return null;
-  if (isFinite(idea.lat) && isFinite(idea.lng) && !(idea.lat === 0 && idea.lng === 0)) {
-    return { lat: Number(idea.lat), lng: Number(idea.lng) };
-  }
-  return parseLatLng(idea.mapsUrl) || parseLatLng(idea.infoUrl);
-}
-
-// What we'd search for if we have to look the place up.
-function geocodeQuery(idea) {
-  if (!idea) return "";
-  const bits = [idea.title, idea.place].filter(Boolean).map(s => String(s).trim());
-  if (!bits.length) return "";
-  return bits.join(", ").slice(0, 160);
-}
-
-// Look a place up on OpenStreetMap when its link carries no coordinates.
-// Deliberately quiet: it runs in the background, one at a time, and if it finds
-// nothing the idea simply has no location. You are never asked to fill it in.
-// Results are cached in localStorage and written onto the idea, so each place is
-// looked up once, ever. Throttled to one request per second, which is what the
-// public service asks for. If Flokk ever gets big this wants its own server.
-const GEO_CACHE_KEY = "flokk-geocache-v1";
-const GEO_ENDPOINT = "https://nominatim.openstreetmap.org/search";
-
-function readGeoCache() {
-  try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}") || {}; } catch { return {}; }
-}
-function writeGeoCache(cache) {
-  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache)); } catch {}
-}
-
-let _geoLast = 0;
-async function geocodePlace(query) {
-  const q = (query || "").trim();
-  if (!q) return null;
-
-  const cache = readGeoCache();
-  if (Object.prototype.hasOwnProperty.call(cache, q)) return cache[q]; // null means "looked, found nothing"
-
-  // Be a good citizen: at most one request per second.
-  const wait = Math.max(0, 1100 - (Date.now() - _geoLast));
-  if (wait) await new Promise(r => setTimeout(r, wait));
-  _geoLast = Date.now();
-
-  let found = null;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const url = `${GEO_ENDPOINT}?format=jsonv2&limit=1&addressdetails=1&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" } });
-    clearTimeout(timer);
-    if (res.ok) {
-      const data = await res.json();
-      const hit = Array.isArray(data) && data[0];
-      if (hit && isFinite(parseFloat(hit.lat)) && isFinite(parseFloat(hit.lon))) {
-        found = {
-          lat: parseFloat(hit.lat),
-          lng: parseFloat(hit.lon),
-          area: pickArea(hit),
-        };
-      }
-    }
-  } catch {
-    // Offline, blocked, rate limited, whatever. Not worth bothering anyone about.
-    return null;   // not cached, so it can be retried later
-  }
-
-  cache[q] = found;
-  writeGeoCache(cache);
-  return found;
-}
-
-// A human-sized area name: the neighbourhood if there is one, else the town.
-function pickArea(hit) {
-  const a = hit && hit.address;
-  if (a) {
-    const pick = a.neighbourhood || a.suburb || a.quarter || a.city_district || a.town || a.village || a.city;
-    if (pick) return String(pick);
-  }
-  const parts = String(hit?.display_name || "").split(",").map(s => s.trim()).filter(Boolean);
-  return parts.length > 2 ? parts[1] : (parts[0] || "");
 }
 
 const CATEGORY_HINTS = [
@@ -569,6 +453,94 @@ function StayCalendar({ tripDates, checkIn, checkOut, onChange }) {
 }
 
 // ─── IdeaForm modal ───────────────────────────────────────────────────────────
+// ─── Day route sheet ──────────────────────────────────────────────────────────
+// Shows what Flokk is about to send Google before it sends it, because a
+// conversational title can land in the wrong part of the country and you want
+// to catch that here rather than in Tokyo. Tap any stop to leave it out.
+const ROUTE_MODES = [
+  { id: "walking", label: "Walk" },
+  { id: "transit", label: "Transit" },
+  { id: "driving", label: "Drive" },
+];
+
+function DayRouteSheet({ stops, dateLabel, isMobile, onClose }) {
+  const [mode, setMode] = useState("walking");
+  const [dropped, setDropped] = useState(() => new Set());
+
+  const chosen = stops.filter(s => !dropped.has(s.id));
+  const names = chosen.map(s => s.name);
+  const legs = routeLegs(names, mode, isMobile ? 5 : 10);
+
+  const toggle = id => setDropped(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  return (
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.routeSheet} onClick={e => e.stopPropagation()}>
+        <div style={styles.routeHeader}>
+          <div>
+            <div style={styles.routeTitle}>Day route</div>
+            <div style={styles.routeSub}>{dateLabel}</div>
+          </div>
+          <button style={styles.routeClose} onClick={onClose} aria-label="Close"><IconClose size={18} /></button>
+        </div>
+
+        <div style={styles.routeModes}>
+          {ROUTE_MODES.map(m => (
+            <button key={m.id} type="button"
+              style={{ ...styles.routeMode, ...(mode === m.id ? styles.routeModeOn : {}) }}
+              onClick={() => setMode(m.id)}>{m.label}</button>
+          ))}
+        </div>
+
+        <div style={styles.routeList}>
+          <div style={styles.routeHint}>Sending these to Google. Tap one to leave it out.</div>
+          {stops.map((s, i) => {
+            const off = dropped.has(s.id);
+            return (
+              <button key={s.id} type="button" onClick={() => toggle(s.id)}
+                style={{ ...styles.routeStop, ...(off ? styles.routeStopOff : {}) }}>
+                <span style={{ ...styles.routeDot, background: off ? "#D6CFC5" : (CAT[s.category] || CAT.misc).color }}>{off ? "" : i + 1}</span>
+                <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <span style={styles.routeStopName}>{s.name}</span>
+                  {s.name !== s.title && <span style={styles.routeStopFrom}>{s.title}</span>}
+                </span>
+                {s.time && <span style={styles.routeStopTime}>{s.time}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={styles.routeFooter}>
+          {legs.length === 0 ? (
+            <div style={styles.routeEmpty}>Pick at least two stops.</div>
+          ) : (
+            <>
+              {legs.length > 1 && (
+                <div style={styles.routeSplitNote}>
+                  {isMobile ? "Phones only take five stops per link, so this opens in " : "This opens in "}
+                  {legs.length} parts.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                {legs.map((leg, i) => (
+                  <a key={i} href={leg.url} target="_blank" rel="noopener noreferrer"
+                     style={{ ...styles.routeGo, ...(i > 0 ? styles.routeGoAlt : {}) }}>
+                    <IconMap size={15} /> {legs.length > 1 ? `Part ${i + 1}` : "Open in Google Maps"}
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea ? {
     title: "", category: "activity", date: "", checkOut: "", time: "",
@@ -1735,283 +1707,236 @@ ${dayCards}
 
 
 // ─── MapView — VOLO-style winding journey map, one card per day ───────────────
-// ─── A real map ───────────────────────────────────────────────────────────────
-// Hand-rolled rather than pulling in a mapping library, so Flokk stays a single
-// file you can paste into GitHub. Tiles come from OpenStreetMap, which needs no
-// key and no account. Attribution is required and sits bottom-right.
-const TILE = 256;
-function lngToWorldX(lng, z) { return ((lng + 180) / 360) * Math.pow(2, z) * TILE; }
-function latToWorldY(lat, z) {
-  const r = Math.max(-85.05112878, Math.min(85.05112878, lat)) * Math.PI / 180;
-  return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z) * TILE;
-}
-function worldXToLng(x, z) { return x / (Math.pow(2, z) * TILE) * 360 - 180; }
-function worldYToLat(y, z) {
-  const n = Math.PI - 2 * Math.PI * y / (Math.pow(2, z) * TILE);
-  return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-}
+function MapView({ trip, ideas }) {
+  const scheduled = {};
+  ideas.filter(i => i.date && i.category !== "accommodation").forEach(i => {
+    if (!scheduled[i.date]) scheduled[i.date] = [];
+    scheduled[i.date].push(i);
+  });
+  Object.values(scheduled).forEach(arr => arr.sort((a,b) => (a.time||"99") > (b.time||"99") ? 1 : -1));
 
-// Pick a centre and zoom that fits every point, with a little breathing room.
-function fitPoints(points, w, h) {
-  const pts = (points || []).filter(p => p && isFinite(p.lat) && isFinite(p.lng));
-  if (!pts.length) return { lat: 35.6812, lng: 139.7671, zoom: 11 };
-  if (pts.length === 1) return { lat: pts[0].lat, lng: pts[0].lng, zoom: 15 };
-  const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-  let zoom = 16;
-  for (let z = 16; z >= 2; z--) {
-    const dx = Math.abs(lngToWorldX(maxLng, z) - lngToWorldX(minLng, z));
-    const dy = Math.abs(latToWorldY(minLat, z) - latToWorldY(maxLat, z));
-    if (dx < w - 80 && dy < h - 100) { zoom = z; break; }
-    zoom = z;
-  }
-  return { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2, zoom };
-}
-
-function TileMap({ points, height = 420, onPick, selectedId }) {
-  const wrapRef = useRef(null);
-  const [size, setSize] = useState({ w: 360, h: height });
-  const [view, setView] = useState(null);
-  const drag = useRef(null);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth || 360, h: height });
-    measure();
-    let ro;
-    try { ro = new ResizeObserver(measure); ro.observe(el); } catch {}
-    window.addEventListener("resize", measure);
-    return () => { window.removeEventListener("resize", measure); try { ro && ro.disconnect(); } catch {} };
-  }, [height]);
-
-  // Re-fit when the set of points changes, but leave the view alone while panning.
-  const key = (points || []).map(p => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
-  useEffect(() => { setView(fitPoints(points, size.w, size.h)); /* eslint-disable-next-line */ }, [key, size.w, size.h]);
-
-  if (!view) return <div ref={wrapRef} style={{ ...styles.mapCanvas, height }} />;
-
-  const { lat, lng, zoom } = view;
-  const z = Math.round(zoom);
-  const cx = lngToWorldX(lng, z), cy = latToWorldY(lat, z);
-  const tlx = cx - size.w / 2, tly = cy - size.h / 2;
-  const n = Math.pow(2, z);
-
-  const tiles = [];
-  const x0 = Math.floor(tlx / TILE), x1 = Math.floor((tlx + size.w) / TILE);
-  const y0 = Math.floor(tly / TILE), y1 = Math.floor((tly + size.h) / TILE);
-  for (let ty = y0; ty <= y1; ty++) {
-    if (ty < 0 || ty >= n) continue;
-    for (let tx = x0; tx <= x1; tx++) {
-      const wrapped = ((tx % n) + n) % n;
-      tiles.push({
-        key: `${z}/${wrapped}/${ty}/${tx}`,
-        url: `https://tile.openstreetmap.org/${z}/${wrapped}/${ty}.png`,
-        left: tx * TILE - tlx,
-        top: ty * TILE - tly,
-      });
-    }
-  }
-
-  const startDrag = (px, py) => { drag.current = { px, py, moved: false }; };
-  const moveDrag = (px, py) => {
-    if (!drag.current) return;
-    const dx = px - drag.current.px, dy = py - drag.current.py;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.current.moved = true;
-    drag.current.px = px; drag.current.py = py;
-    setView(v => ({
-      zoom: v.zoom,
-      lng: worldXToLng(lngToWorldX(v.lng, z) - dx, z),
-      lat: worldYToLat(latToWorldY(v.lat, z) - dy, z),
-    }));
-  };
-  const endDrag = () => { drag.current = null; };
-  const nudgeZoom = d => setView(v => ({ ...v, zoom: Math.max(2, Math.min(18, Math.round(v.zoom) + d)) }));
-
-  return (
-    <div ref={wrapRef} style={{ ...styles.mapCanvas, height }}
-      onMouseDown={e => startDrag(e.clientX, e.clientY)}
-      onMouseMove={e => drag.current && moveDrag(e.clientX, e.clientY)}
-      onMouseUp={endDrag}
-      onMouseLeave={endDrag}
-      onTouchStart={e => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchMove={e => { if (e.touches[0] && drag.current) { moveDrag(e.touches[0].clientX, e.touches[0].clientY); } }}
-      onTouchEnd={endDrag}>
-
-      {tiles.map(t => (
-        <img key={t.key} src={t.url} alt="" draggable={false} loading="lazy"
-          style={{ position: "absolute", left: t.left, top: t.top, width: TILE, height: TILE, userSelect: "none", pointerEvents: "none" }} />
-      ))}
-
-      {(points || []).map(p => {
-        const px = lngToWorldX(p.lng, z) - tlx;
-        const py = latToWorldY(p.lat, z) - tly;
-        if (px < -40 || py < -50 || px > size.w + 40 || py > size.h + 50) return null;
-        const active = selectedId && p.id === selectedId;
-        return (
-          <button key={p.id} type="button" title={p.label}
-            onClick={e => { e.stopPropagation(); if (!drag.current?.moved && onPick) onPick(p); }}
-            style={{ ...styles.mapPin, left: px, top: py, background: p.color || "#C85A2A",
-                     transform: `translate(-50%,-100%) scale(${active ? 1.25 : 1})`, zIndex: active ? 6 : 5 }}>
-            {p.n || ""}
-          </button>
-        );
-      })}
-
-      <div style={styles.mapZoom}>
-        <button type="button" style={styles.mapZoomBtn} onClick={() => nudgeZoom(1)} aria-label="Zoom in">+</button>
-        <button type="button" style={styles.mapZoomBtn} onClick={() => nudgeZoom(-1)} aria-label="Zoom out">−</button>
-      </div>
-      <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" style={styles.mapAttrib}>© OpenStreetMap</a>
-    </div>
-  );
-}
-
-// The Map tab used to draw decorative winding roads on invented terrain, which
-// looked nice but could not answer the one question that sends you to Google
-// Maps: is this near the other things I'm doing that day? This shows where
-// things actually are.
-function MapView({ trip, ideas, onEditIdea }) {
-  const [dayFilter, setDayFilter] = useState("all");
-  const [picked, setPicked] = useState(null);
-  const [, setGeoTick] = useState(0);
-  const geoRunning = useRef(false);
-
+  // Map pins are places you travel to, so a check-out is not a pin — only the
+  // hotel you actually sleep at that night appears on the day's route.
   const { staysOnDay } = buildStayMaps(ideas, trip.dates);
 
-  // Everything worth putting on a map, in day then time order.
-  const placeable = useMemo(() => {
-    const out = [];
-    trip.dates.forEach((d, di) => {
-      const stays = staysOnDay[d] || [];
-      const stops = ideas
-        .filter(i => i.date === d && i.category !== "accommodation")
-        .sort((a, b) => (a.time || "99") > (b.time || "99") ? 1 : -1);
-      stays.forEach(s => out.push({ idea: s, date: d, dayNum: di + 1, n: "" }));
-      stops.forEach((s, si) => out.push({ idea: s, date: d, dayNum: di + 1, n: si + 1 }));
-    });
-    // Unscheduled ideas still deserve a pin, so you can see where they'd fit.
-    ideas.filter(i => !i.date).forEach(i => out.push({ idea: i, date: null, dayNum: null, n: "" }));
-    return out;
-  }, [ideas, trip.dates, staysOnDay]);
+  const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d]);
+  const totalDays = trip.dates.length;
 
-  // Quietly fill in any missing locations, one at a time, in the background.
-  useEffect(() => {
-    if (geoRunning.current) return;
-    const missing = placeable.filter(p => !ideaLatLng(p.idea) && geocodeQuery(p.idea)).slice(0, 25);
-    if (!missing.length) return;
-    geoRunning.current = true;
-    let cancelled = false;
-    (async () => {
-      for (const p of missing) {
-        if (cancelled) break;
-        const hit = await geocodePlace(geocodeQuery(p.idea));
-        if (hit) {
-          p.idea.lat = hit.lat; p.idea.lng = hit.lng;
-          if (!p.idea.area && hit.area) p.idea.area = hit.area;
-          if (!cancelled) setGeoTick(t => t + 1);
-        }
-      }
-      geoRunning.current = false;
-    })();
-    return () => { cancelled = true; geoRunning.current = false; };
-  }, [placeable]);
+  if (days.length === 0) {
+    return (
+      <div style={styles.storyOuter}>
+        <div style={{ color: "#6B7A90", textAlign: "center", padding: "80px 0", fontSize: 14, fontFamily: "'Inter',sans-serif" }}>
+          Schedule some ideas to see your journey map
+        </div>
+      </div>
+    );
+  }
 
-  const visible = placeable.filter(p => dayFilter === "all" || p.date === dayFilter);
-  const points = visible
-    .map(p => {
-      const ll = ideaLatLng(p.idea);
-      if (!ll) return null;
-      const cat = CAT[p.idea.category] || CAT.misc;
-      return { id: p.idea.id, lat: ll.lat, lng: ll.lng, color: cat.color, n: p.n,
-               label: p.idea.title, idea: p.idea, dayNum: p.dayNum, date: p.date };
-    })
-    .filter(Boolean);
-
-  const placedCount = points.length;
-  const totalCount = visible.length;
-  const areas = [...new Set(visible.map(p => p.idea.area).filter(Boolean))];
-
-  const pickedPoint = points.find(p => p.id === picked);
+  // Terrain textures per day index (cycles)
+  const terrains = [
+    { bg: "linear-gradient(180deg,#FAF7F2 0%,#c8e6f0 60%,#a8d4e8 100%)", road: "#fff", label: "coastal" },
+    { bg: "linear-gradient(180deg,#e8f5e9 0%,#c8e6c9 60%,#a5d6a7 100%)", road: "#fff", label: "forest" },
+    { bg: "linear-gradient(180deg,#fff8e1 0%,#ffecb3 60%,#ffe082 100%)", road: "#fff", label: "desert" },
+    { bg: "linear-gradient(180deg,#fce4ec 0%,#f8bbd0 60%,#f48fb1 100%)", road: "#fff", label: "city" },
+    { bg: "linear-gradient(180deg,#ede7f6 0%,#d1c4e9 60%,#b39ddb 100%)", road: "#fff", label: "mountain" },
+  ];
 
   return (
-    <div style={styles.mapOuter}>
-      {/* Day filter */}
-      <div style={styles.mapFilterRow}>
-        <button type="button" style={{ ...styles.mapFilterChip, ...(dayFilter === "all" ? styles.mapFilterChipOn : {}) }}
-          onClick={() => setDayFilter("all")}>Whole trip</button>
-        {trip.dates.map((d, i) => {
-          const count = placeable.filter(p => p.date === d).length;
-          if (!count) return null;
-          return (
-            <button key={d} type="button"
-              style={{ ...styles.mapFilterChip, ...(dayFilter === d ? styles.mapFilterChipOn : {}) }}
-              onClick={() => setDayFilter(d)}>Day {i + 1}</button>
-          );
-        })}
+    <div style={styles.storyOuter}>
+      {/* Cover map card */}
+      <div style={{ ...styles.mapCard, background: "linear-gradient(160deg,#1B2B4B 0%,#233260 50%,#C9B8A8 100%)" }}>
+        <div style={styles.mapCoverInner}>
+          <div style={{ marginBottom: 8, color: "#C9B8A8" }}><IconMap size={48} /></div>
+          <div style={styles.mapCoverTitle}>{trip.name}</div>
+          <div style={styles.mapCoverDates}>{fmtDate(trip.start)} — {fmtDate(trip.end)}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", marginTop: 12 }}>
+            {trip.travellers.map(t => <span key={t} style={styles.storyCoverTraveller}>{t}</span>)}
+          </div>
+          <div style={styles.mapCoverStats}>
+            <span style={styles.mapStat}><span style={styles.mapStatNum}>{totalDays}</span><br/>days</span>
+            <span style={styles.mapStatDivider}>·</span>
+            <span style={styles.mapStat}><span style={styles.mapStatNum}>{ideas.filter(i=>i.date).length}</span><br/>stops</span>
+            <span style={styles.mapStatDivider}>·</span>
+            <span style={styles.mapStat}><span style={styles.mapStatNum}>{trip.travellers.length||1}</span><br/>travellers</span>
+          </div>
+          {/* Dotted flight path decoration */}
+          <svg width="260" height="40" style={{ marginTop: 16, opacity: 0.4 }}>
+            <path d="M 10 20 Q 65 5 130 20 Q 195 35 250 20" stroke="#F5E882" strokeWidth="2" strokeDasharray="5,5" fill="none"/>
+            <text x="10" y="24" fontSize="16">🛫</text>
+            <text x="230" y="24" fontSize="16">🛬</text>
+          </svg>
+        </div>
       </div>
 
-      <TileMap points={points} height={430} selectedId={picked} onPick={p => setPicked(p.id)} />
+      {/* One winding map card per day */}
+      {days.map((date, dayIdx) => {
+        const stops = scheduled[date] || [];
+        const stays = staysOnDay[date] || [];
+        const allStops = [...stays.map(s => ({ ...s, _isStay: true })), ...stops];
+        const dayNum = trip.dates.indexOf(date) + 1;
+        const terrain = terrains[dayIdx % terrains.length];
 
-      {/* Honest about what could and could not be placed */}
-      <div style={styles.mapStatus}>
-        <span>
-          {placedCount} of {totalCount} place{totalCount === 1 ? "" : "s"} on the map
-          {areas.length > 0 && ` · ${areas.slice(0, 3).join(", ")}${areas.length > 3 ? ` +${areas.length - 3}` : ""}`}
-        </span>
-        {placedCount < totalCount && (
-          <span style={{ color: "#A8702F" }}>{totalCount - placedCount} still being looked up</span>
-        )}
-      </div>
+        // SVG winding path: alternating left-right columns
+        const CARD_W = 340;
+        const STOP_H = 100;
+        const SVG_H = Math.max(200, allStops.length * STOP_H + 60);
+        const LEFT_X = 80, RIGHT_X = 260, MID_X = 170;
 
-      {/* Tapped pin */}
-      {pickedPoint && (
-        <div style={styles.mapPickCard}>
-          <CatIcon id={pickedPoint.idea.category} size={20} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={styles.mapPickTitle}>{pickedPoint.idea.title}</div>
-            <div style={styles.mapPickMeta}>
-              {pickedPoint.dayNum ? `Day ${pickedPoint.dayNum}` : "Not scheduled"}
-              {pickedPoint.idea.time ? ` · ${pickedPoint.idea.time}` : ""}
-              {pickedPoint.idea.area ? ` · ${pickedPoint.idea.area}` : ""}
+        const stopPositions = allStops.map((_, i) => ({
+          x: i % 2 === 0 ? LEFT_X : RIGHT_X,
+          y: 50 + i * STOP_H,
+        }));
+
+        // Build SVG path segments
+        let pathD = "";
+        if (stopPositions.length > 0) {
+          pathD = `M ${stopPositions[0].x} ${stopPositions[0].y}`;
+          for (let i = 1; i < stopPositions.length; i++) {
+            const prev = stopPositions[i-1];
+            const cur = stopPositions[i];
+            // S-curve between stops
+            pathD += ` C ${prev.x} ${prev.y + STOP_H*0.5}, ${cur.x} ${cur.y - STOP_H*0.5}, ${cur.x} ${cur.y}`;
+          }
+        }
+
+        return (
+          <div key={date} style={{ ...styles.mapCard, background: terrain.bg }}>
+            {/* Day header */}
+            <div style={styles.mapDayHeader}>
+              <span style={styles.mapDayNum}>Day {dayNum}</span>
+              <span style={styles.mapDayDate}>{fmtDate(date)}</span>
+              <span style={styles.mapDayTrip}>{trip.name}</span>
+            </div>
+
+            {/* The map itself */}
+            <div style={{ position: "relative", width: "100%", minHeight: SVG_H }}>
+              <svg width="100%" height={SVG_H} viewBox={`0 0 ${CARD_W} ${SVG_H}`} style={{ position: "absolute", top: 0, left: 0 }}>
+                {/* Ground texture dots */}
+                {Array.from({length: 30}).map((_,i) => (
+                  <circle key={i} cx={20 + (i*67%290)} cy={30 + (i*53%SVG_H)} r="2" fill="rgba(255,255,255,0.25)"/>
+                ))}
+                {/* Road shadow */}
+                {pathD && <path d={pathD} stroke="rgba(0,0,0,0.08)" strokeWidth="14" fill="none" strokeLinecap="round"/>}
+                {/* Road */}
+                {pathD && <path d={pathD} stroke={terrain.road} strokeWidth="10" fill="none" strokeLinecap="round" strokeOpacity="0.9"/>}
+                {/* Dashes on road */}
+                {pathD && <path d={pathD} stroke="#e8e8e8" strokeWidth="2" strokeDasharray="8,12" fill="none" strokeLinecap="round" strokeOpacity="0.6"/>}
+              </svg>
+
+              {/* Stop nodes */}
+              {allStops.map((item, i) => {
+                const cat = item._isStay ? CAT["accommodation"] : (CAT[item.category] || CAT.misc);
+                const pos = stopPositions[i];
+                const isLeft = i % 2 === 0;
+                if (!pos) return null;
+
+                const xPct = (pos.x / CARD_W) * 100;
+                const yPct = (pos.y / SVG_H) * 100;
+
+                return (
+                  <div key={item.id} style={{
+                    position: "absolute",
+                    left: `${xPct}%`,
+                    top: `${yPct}%`,
+                    transform: "translate(-50%, -50%)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    zIndex: 10,
+                    width: 120,
+                  }}>
+                    {/* Illustration placeholder bubble */}
+                    <div style={{
+                      width: 52, height: 52,
+                      borderRadius: "50%",
+                      background: "#fff",
+                      border: `3px solid ${cat.color}`,
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 24,
+                      marginBottom: 4,
+                      position: "relative",
+                    }}>
+                      <CatIcon id={item.category} size={16} />
+                      {/* Stop number badge */}
+                      <div style={{
+                        position: "absolute", top: -4, right: -4,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: cat.color, color: "#fff",
+                        fontSize: 9, fontWeight: 700,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "'Inter',sans-serif",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                      }}>{i + 1}</div>
+                    </div>
+                    {/* Label pill */}
+                    <div style={{
+                      background: "rgba(255,255,255,0.92)",
+                      borderRadius: 20,
+                      padding: "2px 8px",
+                      fontSize: 9,
+                      color: "#1B2B4B",
+                      fontFamily: "'Inter',sans-serif",
+                      fontWeight: 600,
+                      textAlign: "center",
+                      maxWidth: 110,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+                      lineHeight: 1.6,
+                    }}>
+                      {item._isStay && <span style={{ verticalAlign: "middle", marginRight: 4 }}><CatIcon id="accommodation" size={12} /></span>}{item.title}
+                    </div>
+                    {/* Time if present */}
+                    {item.time && !item._isStay && (
+                      <div style={{
+                        fontSize: 8, color: "#6B7A90",
+                        fontFamily: "'Inter',sans-serif",
+                        marginTop: 2,
+                      }}>{item.time}</div>
+                    )}
+                    {/* Map link */}
+                    {item.mapsUrl && (
+                      <a href={item.mapsUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 8, color: "#C85A2A", marginTop: 1, textDecoration: "none", fontFamily: "'Inter',sans-serif" }}
+                        onClick={e => e.stopPropagation()}>
+                        <IconMap size={10} /> map
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Empty state */}
+              {allStops.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#6B7A90", fontSize: 12, fontFamily: "'Inter',sans-serif" }}>
+                  No stops yet for this day
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={styles.mapDayFooter}>
+              <span>{allStops.length} stop{allStops.length !== 1 ? "s" : ""}</span>
+              {(() => {
+                const names = stops.map(routeName).filter(Boolean);
+                const legs = routeLegs(names, "walking", 5);
+                return legs.length ? (
+                  <a href={legs[0].url} target="_blank" rel="noopener noreferrer" style={styles.storyMapBtn}>
+                    <IconMap size={13} /> Full day route
+                  </a>
+                ) : null;
+              })()}
             </div>
           </div>
-          {pickedPoint.idea.mapsUrl && (
-            <a href={pickedPoint.idea.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag}><IconMap size={13} /></a>
-          )}
-          {onEditIdea && (
-            <button style={styles.iconBtn} onClick={() => onEditIdea(pickedPoint.idea)}><IconEdit size={13} /></button>
-          )}
-          <button style={styles.iconBtn} onClick={() => setPicked(null)}><IconClose size={13} /></button>
-        </div>
-      )}
-
-      {/* Day route out to Google Maps */}
-      {dayFilter !== "all" && (() => {
-        const legs = buildDayRouteLegs(ideas, trip, dayFilter);
-        if (!legs.length) return null;
-        return (
-          <div style={styles.mapRouteRow}>
-            {legs.map((leg, i) => (
-              <a key={i} href={leg.url} target="_blank" rel="noopener noreferrer"
-                 style={{ ...styles.mapRouteBtn, ...(i > 0 ? styles.mapRouteBtnAlt : {}) }}>
-                <IconMap size={14} /> {legs.length > 1 ? `Part ${i + 1}` : "Open day route"}
-              </a>
-            ))}
-          </div>
         );
-      })()}
-
-      {totalCount === 0 && (
-        <div style={{ color: "#6B7A90", textAlign: "center", padding: "28px 0", fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
-          Add some ideas and they'll show up here.
-        </div>
-      )}
+      })}
     </div>
   );
 }
 
+// ─── StoryView — one 9:16 card per day, vertically stacked ──────────────────
 function StoryView({ trip, ideas }) {
   const scheduled = {};
   ideas.filter(i => i.date && i.category !== "accommodation").forEach(i => {
@@ -2177,6 +2102,7 @@ export default function TripPlanner() {
   const [tab, setTab] = useState("plan");
   const [showForm, setShowForm] = useState(false);
   const [editIdea, setEditIdea] = useState(null);
+  const [routeDay, setRouteDay] = useState(null);   // day whose route sheet is open
   const [activeDay, setActiveDay] = useState(null);
   const [mobileView, setMobileView] = useState("pool"); // "pool" | "schedule"
   const [dragging, setDragging] = useState(null);
@@ -2616,6 +2542,14 @@ export default function TripPlanner() {
           onCancel={() => { setShowForm(false); setEditIdea(null); }} />
       )}
 
+      {routeDay && (
+        <DayRouteSheet
+          stops={dayRouteStops(ideas, routeDay)}
+          dateLabel={fmtDate(routeDay)}
+          isMobile={isMobile}
+          onClose={() => setRouteDay(null)} />
+      )}
+
       {/* Welcome banner for new visitors */}
       {showWelcomeBanner && screen === "dashboard" && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200, padding: "0 16px 24px" }}>
@@ -2869,20 +2803,12 @@ export default function TripPlanner() {
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexShrink: 0 }}>
                   <div style={styles.dayTitle}>{activeDay ? fmtDate(activeDay) : "—"}</div>
-                  {activeDay && scheduled[activeDay]?.length > 0 && (() => {
-                      const legs = buildDayRouteLegs(ideas, trip, activeDay);
-                      if (!legs.length) return null;
-                      return (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                          {legs.map((leg, i) => (
-                            <a key={i} href={leg.url} target="_blank" rel="noopener noreferrer"
-                               style={{ ...styles.mapsBtn, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                              <IconMap size={14} /> {legs.length > 1 ? `Route ${i + 1}/${legs.length}` : "Day Route"}
-                            </a>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                  {activeDay && dayRouteStops(ideas, activeDay).length >= 2 && (
+                    <button style={{ ...styles.mapsBtn, display: "inline-flex", alignItems: "center", gap: 6, border: "none", cursor: "pointer" }}
+                      onClick={() => setRouteDay(activeDay)}>
+                      <IconMap size={14} /> Day Route
+                    </button>
+                  )}
                 </div>
 
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
@@ -3032,7 +2958,7 @@ export default function TripPlanner() {
                 ⬇ Export PDF
               </button>
             </div>
-            {storyMode === "cards" ? <StoryView trip={trip} ideas={ideas} /> : <MapView trip={trip} ideas={ideas} onEditIdea={setEditIdea} />}
+            {storyMode === "cards" ? <StoryView trip={trip} ideas={ideas} /> : <MapView trip={trip} ideas={ideas} />}
           </div>
         )}
 
@@ -3184,28 +3110,33 @@ const styles = {
   travChip: { background: "#F0EBE3", color: "#1B2B4B", borderRadius: 20, padding: "5px 14px", fontSize: 12, display: "flex", alignItems: "center", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
 
   // Stay banner
+  // Day route sheet
+  routeSheet: { background: "#FAF7F2", width: "100%", maxWidth: 480, maxHeight: "86dvh", borderRadius: 22, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 12px 48px rgba(27,43,75,0.3)" },
+  routeHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "20px 20px 14px", borderBottom: "1px solid #EDE8E1", flexShrink: 0 },
+  routeTitle: { fontFamily: "'Inter',sans-serif", fontSize: 18, fontWeight: 700, color: "#1B2B4B" },
+  routeSub: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: "#6B7A90", marginTop: 3 },
+  routeClose: { background: "#F0EBE3", border: "none", borderRadius: 10, width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#1B2B4B", flexShrink: 0 },
+  routeModes: { display: "flex", gap: 6, padding: "12px 20px 4px", flexShrink: 0 },
+  routeMode: { flex: 1, padding: "9px 6px", borderRadius: 12, border: "1px solid #EDE8E1", background: "#fff", color: "#6B7A90", fontSize: 12.5, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer" },
+  routeModeOn: { background: "#1B2B4B", color: "#fff", borderColor: "#1B2B4B" },
+  routeList: { overflowY: "auto", padding: "10px 20px 4px", display: "flex", flexDirection: "column", gap: 6 },
+  routeHint: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#6B7A90", paddingBottom: 4 },
+  routeStop: { display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #EDE8E1", borderRadius: 12, padding: "10px 12px", cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "'Inter',sans-serif" },
+  routeStopOff: { background: "#F5F1EA", opacity: 0.55 },
+  routeDot: { width: 22, height: 22, borderRadius: "50%", color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  routeStopName: { display: "block", fontSize: 13.5, fontWeight: 600, color: "#1B2B4B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  routeStopFrom: { display: "block", fontSize: 10.5, color: "#A79C8E", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  routeStopTime: { fontSize: 11, color: "#6B7A90", flexShrink: 0 },
+  routeFooter: { padding: "14px 20px", paddingBottom: "calc(18px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid #EDE8E1", flexShrink: 0 },
+  routeSplitNote: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: "#A8702F", marginBottom: 8 },
+  routeEmpty: { fontFamily: "'Inter',sans-serif", fontSize: 12.5, color: "#6B7A90", textAlign: "center", padding: "6px 0" },
+  routeGo: { flex: "1 1 0", minWidth: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "14px 10px", background: "#C85A2A", color: "#fff", borderRadius: 14, fontSize: 13.5, fontWeight: 700, fontFamily: "'Inter',sans-serif", textDecoration: "none", whiteSpace: "nowrap" },
+  routeGoAlt: { background: "#fff", color: "#C85A2A", border: "1.5px solid #E8CBBC" },
+
   stayBanner: { background: "#80906D14", border: "1px solid #80906D33", borderLeft: "3px solid #80906D", borderRadius: 12, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
   // Paste-first capture feedback
   pasteOk: { fontSize: 11, color: "#5E7A52", marginTop: 6, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 5, background: "#80906D14", border: "1px solid #80906D33", borderRadius: 8, padding: "6px 10px" },
   pasteAsk: { fontSize: 11, color: "#A8702F", marginTop: 6, fontFamily: "'Inter',sans-serif", display: "flex", alignItems: "center", gap: 5, background: "#DA9C4118", border: "1px solid #DA9C4140", borderRadius: 8, padding: "6px 10px" },
-
-  // Real map
-  mapOuter: { flex: 1, overflow: "auto", padding: "16px 20px 28px", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 0 },
-  mapCanvas: { position: "relative", width: "100%", overflow: "hidden", borderRadius: 18, background: "#E8E2DA", cursor: "grab", touchAction: "none", border: "1px solid #EDE8E1" },
-  mapPin: { position: "absolute", minWidth: 26, height: 26, padding: "0 5px", borderRadius: "50% 50% 50% 4px", border: "2px solid #fff", color: "#fff", fontSize: 11, fontWeight: 700, fontFamily: "'Inter',sans-serif", cursor: "pointer", boxShadow: "0 2px 8px rgba(27,43,75,0.35)", display: "flex", alignItems: "center", justifyContent: "center", transformOrigin: "50% 100%", transition: "transform .12s" },
-  mapZoom: { position: "absolute", right: 10, top: 10, display: "flex", flexDirection: "column", gap: 4, zIndex: 7 },
-  mapZoomBtn: { width: 32, height: 32, borderRadius: 9, border: "1px solid #EDE8E1", background: "rgba(255,255,255,0.95)", color: "#1B2B4B", fontSize: 17, fontWeight: 700, cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" },
-  mapAttrib: { position: "absolute", right: 6, bottom: 5, fontSize: 9.5, color: "#3F4A5C", background: "rgba(255,255,255,0.82)", padding: "2px 6px", borderRadius: 5, textDecoration: "none", fontFamily: "'Inter',sans-serif", zIndex: 7 },
-  mapFilterRow: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10, WebkitOverflowScrolling: "touch" },
-  mapFilterChip: { flexShrink: 0, padding: "7px 13px", borderRadius: 20, border: "1px solid #EDE8E1", background: "#fff", color: "#6B7A90", fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif", cursor: "pointer", whiteSpace: "nowrap" },
-  mapFilterChipOn: { background: "#1B2B4B", color: "#fff", borderColor: "#1B2B4B" },
-  mapStatus: { display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", fontSize: 11.5, color: "#6B7A90", fontFamily: "'Inter',sans-serif", padding: "9px 4px 0" },
-  mapPickCard: { display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #EDE8E1", borderRadius: 14, padding: "11px 13px", marginTop: 10, boxShadow: "0 2px 12px rgba(26,58,143,0.08)" },
-  mapPickTitle: { fontSize: 13.5, fontWeight: 700, color: "#1B2B4B", fontFamily: "'Inter',sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  mapPickMeta: { fontSize: 11, color: "#6B7A90", fontFamily: "'Inter',sans-serif", marginTop: 2 },
-  mapRouteRow: { display: "flex", gap: 8, marginTop: 10 },
-  mapRouteBtn: { flex: "1 1 0", minWidth: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "12px 10px", background: "#C85A2A", color: "#fff", borderRadius: 14, fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter',sans-serif", textDecoration: "none", whiteSpace: "nowrap" },
-  mapRouteBtnAlt: { background: "#fff", color: "#C85A2A", border: "1.5px solid #E8CBBC" },
 
   // Stay date-range calendar
   calWrap: { background: "#fff", border: "1px solid #EDE8E1", borderRadius: 12, padding: "10px 12px 6px", marginTop: 6 },
