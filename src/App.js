@@ -167,6 +167,50 @@ function isUrl(str) {
   return str.startsWith("http://") || str.startsWith("https://") || str.startsWith("maps.");
 }
 
+// ─── Stays occupy NIGHTS, not days ────────────────────────────────────────────
+// A stay covers the night of check-in up to but NOT including check-out, so
+// checking out of one hotel and into another on the same date no longer looks
+// like two hotels in one night. Check-out surfaces as its own small line.
+// Legacy / sample stays with no checkOut (or checkOut === date) count as one
+// night so nothing already saved silently disappears from the timeline.
+function stayNights(stay) {
+  if (!stay || !stay.date) return 1;
+  if (!stay.checkOut || stay.checkOut <= stay.date) return 1;
+  const ms = new Date(stay.checkOut + "T00:00:00") - new Date(stay.date + "T00:00:00");
+  return Math.max(1, Math.round(ms / 86400000));
+}
+
+function buildStayMaps(ideas, dates) {
+  const staysOnDay = {};      // date -> stays you sleep at that night
+  const checkoutsOnDay = {};  // date -> stays you check out of that morning
+  (ideas || []).filter(i => i.category === "accommodation" && i.date).forEach(stay => {
+    const checkIn = stay.date;
+    const checkOut = stay.checkOut && stay.checkOut > checkIn ? stay.checkOut : null;
+    (dates || []).forEach(d => {
+      if (checkOut) {
+        if (d >= checkIn && d < checkOut) {
+          if (!staysOnDay[d]) staysOnDay[d] = [];
+          staysOnDay[d].push(stay);
+        } else if (d === checkOut) {
+          if (!checkoutsOnDay[d]) checkoutsOnDay[d] = [];
+          checkoutsOnDay[d].push(stay);
+        }
+      } else if (d === checkIn) {
+        if (!staysOnDay[d]) staysOnDay[d] = [];
+        staysOnDay[d].push(stay);
+      }
+    });
+  });
+  return { staysOnDay, checkoutsOnDay };
+}
+
+function stayDateLabel(stay) {
+  if (!stay || !stay.date) return "";
+  if (!stay.checkOut || stay.checkOut <= stay.date) return fmtDate(stay.date);
+  const n = stayNights(stay);
+  return `${fmtDate(stay.date)} → ${fmtDate(stay.checkOut)} · ${n} night${n !== 1 ? "s" : ""}`;
+}
+
 // ─── IdeaForm modal ───────────────────────────────────────────────────────────
 function IdeaForm({ idea, tripDates, travellers, onSave, onCancel }) {
   const [form, setForm] = useState(idea ? {
@@ -1077,19 +1121,9 @@ function exportStoryHTML(trip, ideas) {
   });
   Object.values(scheduled).forEach(arr => arr.sort((a,b) => (a.time||"99") > (b.time||"99") ? 1 : -1));
 
-  const staysOnDay = {};
-  ideas.filter(i => i.category === "accommodation" && i.date).forEach(stay => {
-    const checkIn = stay.date;
-    const checkOut = stay.checkOut || stay.date;
-    trip.dates.forEach(d => {
-      if (d >= checkIn && d <= checkOut) {
-        if (!staysOnDay[d]) staysOnDay[d] = [];
-        staysOnDay[d].push(stay);
-      }
-    });
-  });
+  const { staysOnDay, checkoutsOnDay } = buildStayMaps(ideas, trip.dates);
 
-  const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d]);
+  const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d] || checkoutsOnDay[d]);
   const totalDays = trip.dates.length;
 
   const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
@@ -1109,17 +1143,26 @@ function exportStoryHTML(trip, ideas) {
   const dayCards = days.map((date, idx) => {
     const stops = scheduled[date] || [];
     const stays = staysOnDay[date] || [];
+    const checkouts = checkoutsOnDay[date] || [];
     const dayNum = trip.dates.indexOf(date) + 1;
+
+    const checkoutLines = checkouts.map(stay => `
+      <div class="checkout-line">
+        <span class="checkout-dot"></span>
+        <span class="checkout-label">Check out</span>
+        <span class="checkout-name">${stay.title}</span>
+      </div>`).join("");
 
     const stayBanners = stays.map(stay => `
       <div class="stay-banner">
-        <span style="font-size:16px">🏨</span>
+        ${CATEGORY_SVG.accommodation || ""}
         <div style="flex:1;min-width:0">
           <div class="stay-name">${stay.title}</div>
           ${stay.place ? `<div class="stay-place">${stay.place}</div>` : ""}
+          <div class="stay-place">${stayDateLabel(stay)}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-          ${stay.bookedStatus === "booked" ? `<span style="color:#10b981;font-size:12px">✅ Booked</span>` : ""}
+          ${stay.bookedStatus === "booked" ? `<span style="color:#80906D;font-size:12px">&#10003; Booked</span>` : ""}
           ${stay.mapsUrl ? `<a href="${stay.mapsUrl}" class="map-btn">🗺 Map</a>` : ""}
         </div>
       </div>`).join("");
@@ -1158,6 +1201,7 @@ function exportStoryHTML(trip, ideas) {
           </div>
           <span class="day-trip">${trip.name}</span>
         </div>
+        ${checkoutLines}
         ${stayBanners}
         <div class="stops">${stopItems || `<div style="color:#888;font-size:12px;padding:12px 0;text-align:center">No activities scheduled</div>`}</div>
         <div class="day-footer">
@@ -1197,6 +1241,10 @@ body{font-family:'Inter',sans-serif;background:#FAF7F2;color:#1B2B4B;padding:0 0
 .stay-banner{display:flex;align-items:center;gap:12px;background:#FAF7F2;border-bottom:1px solid #C9B8A8;padding:14px 20px;}
 .stay-name{font-size:14px;color:#1B2B4B;font-weight:600;}
 .stay-place{font-size:12px;color:#6B7A90;margin-top:2px;}
+.checkout-line{display:flex;align-items:center;gap:8px;padding:9px 20px;background:#fff;border-bottom:1px dashed #E0D9CF;}
+.checkout-dot{width:6px;height:6px;border-radius:50%;background:#80906D;flex-shrink:0;}
+.checkout-label{font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#6B7A90;font-weight:600;}
+.checkout-name{font-size:12px;color:#1B2B4B;}
 .stops{padding:16px 20px;display:flex;flex-direction:column;}
 .stop-row{display:flex;gap:14px;}
 .stop-spine{display:flex;flex-direction:column;align-items:center;width:32px;flex-shrink:0;}
@@ -1255,17 +1303,9 @@ function MapView({ trip, ideas }) {
   });
   Object.values(scheduled).forEach(arr => arr.sort((a,b) => (a.time||"99") > (b.time||"99") ? 1 : -1));
 
-  const staysOnDay = {};
-  ideas.filter(i => i.category === "accommodation" && i.date).forEach(stay => {
-    const checkIn = stay.date;
-    const checkOut = stay.checkOut || stay.date;
-    trip.dates.forEach(d => {
-      if (d >= checkIn && d <= checkOut) {
-        if (!staysOnDay[d]) staysOnDay[d] = [];
-        staysOnDay[d].push(stay);
-      }
-    });
-  });
+  // Map pins are places you travel to, so a check-out is not a pin — only the
+  // hotel you actually sleep at that night appears on the day's route.
+  const { staysOnDay } = buildStayMaps(ideas, trip.dates);
 
   const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d]);
   const totalDays = trip.dates.length;
@@ -1434,7 +1474,7 @@ function MapView({ trip, ideas }) {
                       boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
                       lineHeight: 1.6,
                     }}>
-                      {item._isStay ? "🏨 " : ""}{item.title}
+                      {item._isStay && <span style={{ verticalAlign: "middle", marginRight: 4 }}><CatIcon id="accommodation" size={12} /></span>}{item.title}
                     </div>
                     {/* Time if present */}
                     {item.time && !item._isStay && (
@@ -1490,19 +1530,9 @@ function StoryView({ trip, ideas }) {
   });
   Object.values(scheduled).forEach(arr => arr.sort((a,b) => (a.time||"99") > (b.time||"99") ? 1 : -1));
 
-  const staysOnDay = {};
-  ideas.filter(i => i.category === "accommodation" && i.date).forEach(stay => {
-    const checkIn = stay.date;
-    const checkOut = stay.checkOut || stay.date;
-    trip.dates.forEach(d => {
-      if (d >= checkIn && d <= checkOut) {
-        if (!staysOnDay[d]) staysOnDay[d] = [];
-        staysOnDay[d].push(stay);
-      }
-    });
-  });
+  const { staysOnDay, checkoutsOnDay } = buildStayMaps(ideas, trip.dates);
 
-  const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d]);
+  const days = trip.dates.filter(d => scheduled[d] || staysOnDay[d] || checkoutsOnDay[d]);
   const totalDays = trip.dates.length;
 
   if (days.length === 0) {
@@ -1562,16 +1592,25 @@ function StoryView({ trip, ideas }) {
               <span style={styles.storyDayCardTrip}>{trip.name}</span>
             </div>
 
-            {/* Stay banner if any */}
+            {/* Check-out happens in the morning, so it sits above tonight's stay */}
+            {(checkoutsOnDay[date] || []).map(stay => (
+              <div key={`co-${stay.id}`} style={styles.storyCheckoutLine}>
+                <span style={styles.checkoutDot} />
+                <span style={styles.checkoutLabel}>Check out</span>
+                <span style={styles.checkoutName}>{stay.title}</span>
+              </div>
+            ))}
+
+            {/* Stay banner — the hotel you sleep in tonight */}
             {stays.map(stay => (
               <div key={stay.id} style={styles.storyDayStayBanner}>
-                <span style={{ fontSize: 14 }}>🏨</span>
+                <CatIcon id="accommodation" size={14} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, color: "#1B2B4B", fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>{stay.title}</div>
-                  {stay.place && <div style={{ fontSize: 10, color: "#7c6fbb" }}>{stay.place}</div>}
+                  {stay.place && <div style={{ fontSize: 10, color: "#6B7A90" }}>{stay.place}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                  {stay.bookedStatus === "booked" && <span style={{ fontSize: 10, color: "#10b981" }}>✅</span>}
+                  {stay.bookedStatus === "booked" && <span style={{ fontSize: 10, color: "#80906D" }}><IconCheck size={11} /></span>}
                   {stay.mapsUrl && <a href={stay.mapsUrl} target="_blank" rel="noopener noreferrer" style={{ ...styles.storyMapBtn, display: "inline-flex" }}><IconMap size={12} /></a>}
                 </div>
               </div>
@@ -1809,18 +1848,9 @@ export default function TripPlanner() {
   // Derived
   const tripDates = trip?.dates || [];
 
-  // Stays that span multiple days — compute which days each stay covers
-  const staysOnDay = {}; // date -> stay ideas that are active that day
-  ideas.filter(i => i.category === "accommodation" && i.date).forEach(stay => {
-    const checkIn = stay.date;
-    const checkOut = stay.checkOut || stay.date;
-    tripDates.forEach(d => {
-      if (d >= checkIn && d <= checkOut) {
-        if (!staysOnDay[d]) staysOnDay[d] = [];
-        staysOnDay[d].push(stay);
-      }
-    });
-  });
+  // Stays occupy nights: staysOnDay is where you sleep, checkoutsOnDay is the
+  // morning you leave. Keeping them apart is what stops two hotels sharing a night.
+  const { staysOnDay, checkoutsOnDay } = buildStayMaps(ideas, tripDates);
 
   // Scheduled: non-stay items with a date, sorted by time
   const scheduled = {};
@@ -2332,7 +2362,7 @@ export default function TripPlanner() {
                 {tripDates.map(d => (
                   <button key={d} style={{ ...styles.dayTab, ...(activeDay === d ? styles.dayTabActive : {}) }} onClick={() => setActiveDay(d)}>
                     <span>{fmtDate(d)}</span>
-                    {(scheduled[d]?.length > 0 || staysOnDay[d]?.length > 0) && <span style={styles.dayCount}>{(scheduled[d]?.length || 0) + (staysOnDay[d]?.length || 0)}</span>}
+                    {(scheduled[d]?.length > 0 || staysOnDay[d]?.length > 0 || checkoutsOnDay[d]?.length > 0) && <span style={styles.dayCount}>{(scheduled[d]?.length || 0) + (staysOnDay[d]?.length || 0) + (checkoutsOnDay[d]?.length || 0)}</span>}
                   </button>
                 ))}
               </div>
@@ -2356,21 +2386,31 @@ export default function TripPlanner() {
                 </div>
 
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 0 }}>
-                  {/* Stay banners */}
+                  {/* Check-out line — you left this morning, so it reads as a task, not a place */}
+                  {activeDay && (checkoutsOnDay[activeDay] || []).map(stay => (
+                    <div key={`co-${stay.id}`} style={styles.checkoutLine}>
+                      <span style={styles.checkoutDot} />
+                      <span style={styles.checkoutLabel}>Check out</span>
+                      <span style={{ ...styles.checkoutName, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stay.title}</span>
+                      <button style={styles.iconBtn} onClick={() => setEditIdea(stay)}><IconEdit size={13} /></button>
+                    </div>
+                  ))}
+
+                  {/* Stay banner — the hotel you sleep in tonight */}
                   {activeDay && (staysOnDay[activeDay] || []).map(stay => (
                     <div key={stay.id} style={styles.stayBanner}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 20 }}>🏨</span>
+                        <CatIcon id="accommodation" size={20} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 13, color: "#1B2B4B", fontFamily: "'Inter',sans-serif" }}>{stay.title}</div>
                           <div style={{ fontSize: 11, color: "#6B7A90", marginTop: 2, fontFamily: "'Inter',sans-serif" }}>
-                            {fmtDate(stay.date)}{stay.checkOut && stay.checkOut !== stay.date ? ` → ${fmtDate(stay.checkOut)}` : ""}
+                            {stayDateLabel(stay)}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                          {stay.bookedStatus === "booked" && <span style={styles.bookedBadge}>✅</span>}
-                          {stay.mapsUrl && <a href={stay.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag}>🗺</a>}
-                          <button style={styles.iconBtn} onClick={() => setEditIdea(stay)}>✏️</button>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                          {stay.bookedStatus === "booked" && <span style={styles.bookedBadge}><IconCheck size={12} /></span>}
+                          {stay.mapsUrl && <a href={stay.mapsUrl} target="_blank" rel="noopener noreferrer" style={styles.mapsTag}><IconMap size={13} /></a>}
+                          <button style={styles.iconBtn} onClick={() => setEditIdea(stay)}><IconEdit size={13} /></button>
                         </div>
                       </div>
                     </div>
@@ -2458,7 +2498,7 @@ export default function TripPlanner() {
                     </>
                   )}
 
-                  {(!activeDay || (!scheduled[activeDay]?.length && !staysOnDay[activeDay]?.length)) && (
+                  {(!activeDay || (!scheduled[activeDay]?.length && !staysOnDay[activeDay]?.length && !checkoutsOnDay[activeDay]?.length)) && (
                     <div style={styles.dropHint}>
                       <div style={{ marginBottom: 8, color: "#C9B8A8" }}><IconCalendar size={34} /></div>
                       <div>Drop ideas here or give an idea this date</div>
@@ -2614,7 +2654,8 @@ const styles = {
   storyDayNum: { fontFamily: "'Pacifico',cursive", fontWeight: 400, fontSize: 22, color: "#F5E882" },
   storyDayCardDate: { fontSize: 12, color: "rgba(255,255,255,0.6)", fontFamily: "'Inter',sans-serif", fontWeight: 400 },
   storyDayCardTrip: { fontSize: 10, color: "rgba(255,255,255,0.4)", textAlign: "right", fontFamily: "'Inter',sans-serif" },
-  storyDayStayBanner: { display: "flex", alignItems: "center", gap: 10, background: "#F5F0FF", borderBottom: "1px solid #E8E0FF", padding: "12px 20px" },
+  storyDayStayBanner: { display: "flex", alignItems: "center", gap: 10, background: "#80906D14", borderBottom: "1px solid #80906D33", padding: "12px 20px" },
+  storyCheckoutLine: { display: "flex", alignItems: "center", gap: 8, background: "#fff", borderBottom: "1px dashed #E0D9CF", padding: "9px 20px" },
   storyDayStops: { flex: 1, padding: "16px 20px", display: "flex", flexDirection: "column", background: "#fff" },
   storyDayCardFooter: { padding: "10px 20px", borderTop: "1px solid #F0EBE3", display: "flex", justifyContent: "space-between", background: "#FDFAF7" },
   storyMapBtn: { background: "#C85A2A", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 11, textDecoration: "none", flexShrink: 0, whiteSpace: "nowrap", fontFamily: "'Inter',sans-serif", fontWeight: 600 },
@@ -2643,7 +2684,11 @@ const styles = {
   travChip: { background: "#F0EBE3", color: "#1B2B4B", borderRadius: 20, padding: "5px 14px", fontSize: 12, display: "flex", alignItems: "center", fontFamily: "'Inter',sans-serif", fontWeight: 500 },
 
   // Stay banner
-  stayBanner: { background: "#F5F0FF", border: "1px solid #E0D5FF", borderLeft: "3px solid #9B8EC4", borderRadius: 12, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
+  stayBanner: { background: "#80906D14", border: "1px solid #80906D33", borderLeft: "3px solid #80906D", borderRadius: 12, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 },
+  checkoutLine: { display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px dashed #DDD5CA", borderRadius: 10, padding: "7px 12px", marginBottom: 8 },
+  checkoutDot: { width: 6, height: 6, borderRadius: "50%", background: "#80906D", flexShrink: 0 },
+  checkoutLabel: { fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6B7A90", fontWeight: 600, fontFamily: "'Inter',sans-serif", flexShrink: 0 },
+  checkoutName: { fontSize: 12, color: "#1B2B4B", fontFamily: "'Inter',sans-serif" },
 
   // Save button
   saveBtn: { background: "#F5E882", color: "#1B2B4B", border: "1px solid #F5E882", borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter',sans-serif", whiteSpace: "nowrap", transition: "all .2s" },
